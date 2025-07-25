@@ -11,24 +11,31 @@ st.title("👨‍💻 경상국립대학교 2025학년도 2학기 시간표 도�
 
 @st.cache_data
 def load_and_process_data(file_path, major_sheet, general_sheet):
-    # (이전과 동일)
+    """
+    원본 엑셀 파일에서 데이터를 읽고, 수업방식/영역구분 등 모든 정보를 포함하여 처리한다.
+    """
     try:
         df_major = pd.read_excel(file_path, sheet_name=major_sheet)
         df_general = pd.read_excel(file_path, sheet_name=general_sheet)
     except Exception as e:
         st.error(f"엑셀 파일을 읽는 중 오류 발생: {e}")
         return None
+
     general_cols = ['교과목명', '교수명', '학점', '이수구분', '영역구분', '학과', '수강반번호', '강의시간/강의실', '캠퍼스구분', '교과목코드', '수업방법']
     major_cols = ['교과목명', '교수명', '학점', '이수구분', '학부(과)', '대상학년', '분반', '강의시간/강의실', '캠퍼스구분', '교과목코드', '수업방법']
+
     df_general_p = df_general[general_cols].copy()
     df_general_p.rename(columns={'학과': '학부(과)', '수강반번호': '분반'}, inplace=True)
     df_general_p['type'] = '교양'
+
     df_major_p = df_major[major_cols].copy()
     df_major_p['type'] = '전공'
+
     df_combined = pd.concat([df_general_p, df_major_p], ignore_index=True).dropna(subset=['교과목코드', '분반'])
     df_combined[['대상학년', '영역구분']] = df_combined[['대상학년', '영역구분']].fillna('')
     df_combined['교과목코드'] = df_combined['교과목코드'].astype(int)
     df_combined['분반'] = df_combined['분반'].astype(int)
+    
     def parse_time(time_str):
         if not isinstance(time_str, str): return []
         parsed = []
@@ -40,11 +47,14 @@ def load_and_process_data(file_path, major_sheet, general_sheet):
             periods = sorted([int(p) for p in re.findall(r'\d+', re.sub(r'\[.*?\]', '', details))])
             if periods: parsed.append({'day': day, 'periods': periods, 'room': room})
         return parsed
+
     df_combined['parsed_time'] = df_combined['강의시간/강의실'].apply(parse_time)
     return df_combined
 
 def get_available_courses(df, selected_codes):
-    # (이전과 동일)
+    """
+    전체 과목 목록과 현재 선택한 과목 코드를 받아, 시간이 겹치지 않는 과목 목록을 반환한다.
+    """
     my_timed_schedule = [t for code, no in selected_codes for t in df.loc[(df['교과목코드'] == code) & (df['분반'] == no), 'parsed_time'].iloc[0]]
     available_mask = df.index.to_series().astype(bool)
     selected_indices = df[df.set_index(['교과목코드', '분반']).index.isin(selected_codes)].index
@@ -58,13 +68,19 @@ def get_available_courses(df, selected_codes):
     return df[available_mask]
 
 def format_time_for_display(parsed_time):
-    # (이전과 동일)
-    if not parsed_time: return "시간미지정"
-    time_str_parts = [f"{t['day']}{','.join(map(str, t['periods']))}" for t in parsed_time]
+    """시간 정보를 간결한 문자열로 변환 (예: '월1,2 수3')"""
+    if not parsed_time:
+        return "시간미지정"
+    
+    time_str_parts = []
+    for time_info in parsed_time:
+        day = time_info['day']
+        periods = ",".join(map(str, time_info['periods']))
+        time_str_parts.append(f"{day}{periods}")
     return " ".join(time_str_parts)
 
 def generate_random_color():
-    # (이전과 동일)
+    """랜덤으로 밝은 톤의 배경색 생성"""
     return f"hsl({random.randint(0, 360)}, 80%, 90%)"
 
 # --- 웹앱 UI 및 로직 ---
@@ -87,7 +103,6 @@ if master_df is not None:
     tab_major, tab_general = st.tabs(["🎓 전공 과목 선택", "📚 교양 과목 선택"])
     
     with tab_major:
-        # (전공 탭 로직은 이전과 동일)
         majors_df = available_df[available_df['type'] == '전공']
         departments = sorted(majors_df['학부(과)'].dropna().unique().tolist())
         selected_depts = st.multiselect("전공 학부(과)를 모두 선택하세요.", departments)
@@ -108,7 +123,6 @@ if master_df is not None:
                     st.rerun()
 
     with tab_general:
-        # (교양 탭 로직은 이전과 동일)
         general_df = available_df[available_df['type'] == '교양']
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -153,7 +167,6 @@ if master_df is not None:
     if not st.session_state.my_courses:
         st.info("과목을 추가하면 시간표가 여기에 표시됩니다.")
     else:
-        # --- 여기가 수정된 시간표 생성 로직 ---
         days = ['월', '화', '수', '목', '금', '토']
         my_courses_df = master_df[master_df.set_index(['교과목코드', '분반']).index.isin(st.session_state.my_courses)]
         
@@ -166,7 +179,7 @@ if master_df is not None:
             if course['parsed_time']:
                 color = st.session_state.color_map.get(course['교과목명'], "white")
                 for time_info in course['parsed_time']:
-                    # content를 각 시간 블록마다 생성
+                    # --- 여기가 수정된 부분 ---
                     content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>({time_info['room']})"
                     periods = sorted(time_info['periods'])
                     if not periods: continue
@@ -191,7 +204,6 @@ if master_df is not None:
             if not any(timetable_data[(p, d)]["is_visible"] for d in days): continue
             
             html += '<tr>'
-            # 교시와 시간은 rowspan을 적용하지 않고, 각 행마다 표시
             html += f'<td>{p}</td><td>{time_map[p]}</td>'
             for d in days:
                 cell = timetable_data[(p, d)]
