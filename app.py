@@ -139,9 +139,13 @@ if master_df is not None:
         if not selected_depts:
             st.info("먼저 전공 학부(과)를 선택해주세요.")
         else:
+            # =======================================================================
+            # 여기가 오류 수정된 부분
+            # =======================================================================
+            # .str.extract()가 데이터프레임을 반환하므로, [0]으로 첫 번째 열(Series)을 선택해줘야 함
             sorted_df = final_filtered_df.sort_values(
                 by='대상학년',
-                key=lambda s: s.str.extract(r'(\d+)').astype(float).fillna(99)
+                key=lambda s: s.str.extract(r'(\d+)')[0].astype(float).fillna(99)
             )
             
             course_options = sorted_df.apply(lambda x: f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반) / {format_time_for_display(x['parsed_time'])}", axis=1).tolist()
@@ -222,36 +226,28 @@ if master_df is not None:
     if not st.session_state.my_courses:
         st.info("과목을 추가하면 시간표가 여기에 표시됩니다.")
     else:
-        # =======================================================================
-        # 여기가 수정된 시간표 생성 로직
-        # =======================================================================
         my_courses_df = master_df[master_df.set_index(['교과목코드', '분반']).index.isin(st.session_state.my_courses)]
         
-        # 1. 선택된 과목들 중 수업이 있는 요일을 모두 파악
         all_class_days = set()
         for _, course in my_courses_df.iterrows():
             for time_info in course['parsed_time']:
                 all_class_days.add(time_info['day'])
 
-        # 2. 기본 월~금에 토/일요일 과목이 있다면 추가
         days_to_display = ['월', '화', '수', '목', '금']
         if '토' in all_class_days:
             days_to_display.append('토')
         if '일' in all_class_days:
             days_to_display.append('일')
 
-        # 3. 시간표 데이터 구조 생성
         timetable_data = {}
         for p in range(1, 13):
             for d in days_to_display:
                 timetable_data[(p, d)] = {"content": "", "color": "white", "span": 1, "is_visible": True}
 
-        # 4. 시간표 데이터 채우기
         for _, course in my_courses_df.iterrows():
             if course['parsed_time']:
                 color = st.session_state.color_map.get(course['교과목명'], "white")
                 for time_info in course['parsed_time']:
-                    # 해당 요일이 표시 대상이 아니면 건너뜀
                     if time_info['day'] not in days_to_display:
                         continue
                         
@@ -273,7 +269,6 @@ if master_df is not None:
                     for j in range(1, block_len):
                         if start_period + j <= 12: timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
 
-        # 5. 동적으로 HTML 생성
         day_col_width = (100 - 6 - 12) / len(days_to_display)
         html = f"""
         <style>
@@ -283,8 +278,8 @@ if master_df is not None:
             text-align: center; 
             vertical-align: middle; 
             padding: 4px; 
-            height: 65px; /* 높이 축소 */
-            font-size: 0.8em; /* 폰트 크기 축소 */
+            height: 65px;
+            font-size: 0.8em;
             overflow: hidden;
             text-overflow: ellipsis;
         }}
