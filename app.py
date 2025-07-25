@@ -108,16 +108,16 @@ def generate_random_color():
 def format_major_display_string(x):
     """전공 과목 선택 목록에 표시될 문자열을 포맷하는 함수"""
     base_str = f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반) / {format_time_for_display(x['parsed_time'])}"
-    # 수업 방법이 '대면' 또는 '혼합'을 포함할 경우 캠퍼스 정보 추가
-    if '대면' in x['수업방법'] or '혼합' in x['수업방법']:
+    # 수업 방법이 '대면'/'혼합'을 포함하고, 캠퍼스구분 값이 실제로 존재할 경우에만 캠퍼스 정보 추가
+    if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']):
         base_str += f" / {x['캠퍼스구분']}"
     return base_str
 
 def format_general_display_string(x):
     """교양 과목 선택 목록에 표시될 문자열을 포맷하는 함수"""
     base_str = f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
-    # 수업 방법이 '대면' 또는 '혼합'을 포함할 경우 캠퍼스 정보 추가
-    if '대면' in x['수업방법'] or '혼합' in x['수업방법']:
+    # 수업 방법이 '대면'/'혼합'을 포함하고, 캠퍼스구분 값이 실제로 존재할 경우에만 캠퍼스 정보 추가
+    if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']):
         base_str += f" / {x['캠퍼스구분']}"
     return base_str
 
