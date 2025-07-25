@@ -45,7 +45,7 @@ def load_and_process_data(file_path, major_sheet, general_sheet):
     df_combined = pd.concat([df_general_p, df_major_p], ignore_index=True).dropna(subset=['교과목코드', '분반'])
     df_combined[['대상학년', '영역구분']] = df_combined[['대상학년', '영역구분']].fillna('')
     # '비고' 컬럼도 NaN을 빈 문자열로 채워줘서 추후 출력 시 'nan'이 뜨는 것을 방지한다.
-    df_combined['비고'] = df_combined['비고'].fillna('') 
+    df_combined['비고'] = df_combined['비고'].fillna('')  
     df_combined['교과목코드'] = df_combined['교과목코드'].astype(int)
     df_combined['분반'] = df_combined['분반'].astype(int)
     
@@ -174,7 +174,7 @@ if master_df is not None:
     with tab_major:
         majors_df = available_df[available_df['type'] == '전공']
         
-        col1, col2, col3 = st.columns([0.5, 0.25, 0.25])
+        col1, col2, col3, col4 = st.columns(4) # 캠퍼스 선택을 위해 컬럼 하나 더 추가
         
         with col1:
             department_options = sorted(majors_df['학부(과)'].dropna().unique().tolist())
@@ -199,10 +199,18 @@ if master_df is not None:
             type_options = sorted(df_after_grade['이수구분'].dropna().unique().tolist())
             selected_course_type = st.selectbox("이수구분", ["전체"] + type_options, key="course_type_select")
 
-        final_filtered_df = df_after_grade
+        df_after_course_type = df_after_grade
         if selected_course_type != "전체":
-            final_filtered_df = final_filtered_df[final_filtered_df['이수구분'] == selected_course_type]
-        
+            df_after_course_type = df_after_course_type[df_after_course_type['이수구분'] == selected_course_type]
+            
+        with col4: # 전공 과목 캠퍼스 선택란 추가
+            major_campus_options = sorted(df_after_course_type['캠퍼스구분'].dropna().unique().tolist())
+            selected_major_campus = st.selectbox("캠퍼스", ["전체"] + major_campus_options, key="major_campus_select")
+
+        final_filtered_df = df_after_course_type
+        if selected_major_campus != "전체":
+            final_filtered_df = final_filtered_df[final_filtered_df['캠퍼스구분'] == selected_major_campus]
+
         st.write("---")
 
         if not selected_depts:
@@ -257,8 +265,9 @@ if master_df is not None:
                 elif selected_sub_cat == '그 외 일반선택':
                     df_after_sub_cat = df_after_cat[df_after_cat['교과목명'] != '꿈·미래개척']
         
-        area_col, method_col = (col2, col3) if selected_cat != '일반선택' else (col3, col4)
-
+        # 캠퍼스 선택란을 위한 컬럼 분리
+        area_col, method_col, campus_col = (col2, col3, col4) if selected_cat != '일반선택' else (col3, col4, None) # 일반선택일 경우 캠퍼스컬럼 위치 조정
+        
         with area_col:
             area_options = sorted(df_after_sub_cat['영역구분'].dropna().unique().tolist())
             selected_area = st.selectbox("영역구분", ["전체"] + area_options, key="area_select")
@@ -271,9 +280,20 @@ if master_df is not None:
             method_options = sorted(df_after_area['수업방법'].dropna().unique().tolist())
             selected_method = st.selectbox("수업방법", ["전체"] + method_options, key="method_select")
 
-        final_filtered_gen_df = df_after_area
+        df_after_method = df_after_area
         if selected_method != "전체":
-            final_filtered_gen_df = df_after_area[df_after_area['수업방법'] == selected_method]
+            df_after_method = df_after_area[df_after_area['수업방법'] == selected_method]
+        
+        selected_general_campus = "전체" # 기본값 설정
+        # '대면' 또는 '혼합' 수업일 경우에만 캠퍼스 선택란 표시
+        if campus_col and ('대면' in selected_method or '혼합' in selected_method or selected_method == "전체"):
+            with campus_col:
+                general_campus_options = sorted(df_after_method['캠퍼스구분'].dropna().unique().tolist())
+                selected_general_campus = st.selectbox("캠퍼스", ["전체"] + general_campus_options, key="general_campus_select")
+        
+        final_filtered_gen_df = df_after_method
+        if selected_general_campus != "전체":
+            final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['캠퍼스구분'] == selected_general_campus]
 
         st.write("---")
         
@@ -324,7 +344,7 @@ if master_df is not None:
         all_periods = [p for _, course in my_courses_df.iterrows() for time_info in course['parsed_time'] for p in time_info['periods']]
         
         # 실제 데이터에 있는 최대 교시 (과목이 없다면 0)
-        actual_max_period_in_data = max(all_periods) if all_periods else 0 
+        actual_max_period_in_data = max(all_periods) if all_periods else 0  
         
         # 최종적으로 시간표에 표시될 최대 교시는 기본값(9)과 실제 데이터의 최대 교시 중 더 큰 값으로 설정한다.
         final_display_max_period = max(default_max_period, actual_max_period_in_data)
@@ -355,7 +375,7 @@ if master_df is not None:
                             # 생성된 시간표 격자 안에 있는 키인지 확인 후 업데이트
                             if (start_period, time_info['day']) in timetable_data:
                                 timetable_data[(start_period, time_info['day'])].update({"content": content, "color": color, "span": block_len})
-                                for j in range(1, block_len): 
+                                for j in range(1, block_len):  
                                     if (start_period + j, time_info['day']) in timetable_data:
                                         timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
                             start_period, block_len = periods[i], 1
@@ -370,16 +390,16 @@ if master_df is not None:
         day_col_width = (100 - 5 - 10) / len(days_to_display)
         html = f"""
         <style>
-        .timetable {{ 
-            width: 100%; 
-            border-collapse: collapse; 
-            table-layout: fixed; 
+        .timetable {{  
+            width: 100%;  
+            border-collapse: collapse;  
+            table-layout: fixed;  
             border-bottom: 1px solid #e0e0e0;
         }}
-        .timetable th, .timetable td {{ 
-            border: 1px solid #e0e0e0; 
-            text-align: center; 
-            vertical-align: middle; 
+        .timetable th, .timetable td {{  
+            border: 1px solid #e0e0e0;  
+            text-align: center;  
+            vertical-align: middle;  
             padding: 2px;
             height: 50px;
             font-size: 0.75em;
@@ -422,7 +442,7 @@ if master_df is not None:
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
         if untimed_courses:
             st.write("**[시간 미지정 과목]**")
-            for course in untimed_courses: 
+            for course in untimed_courses:  
                 # 시간 미지정 과목에도 비고 정보 추가
                 remark_display = f" / 비고: {course['비고']}" if pd.notna(course['비고']) and course['비고'].strip() != '' else ''
                 st.write(f"- [{course['수업방법']}] {course['교과목명']} ({course['교수명']}, {course['학점']}학점){remark_display}")
