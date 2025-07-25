@@ -85,8 +85,9 @@ if master_df is not None:
     st.subheader("1. 과목 선택")
     
     tab_major, tab_general = st.tabs(["🎓 전공 과목 선택", "📚 교양 과목 선택"])
-    # (탭 로직은 이전과 동일하여 생략)
+    
     with tab_major:
+        # (전공 탭 로직은 이전과 동일)
         majors_df = available_df[available_df['type'] == '전공']
         departments = sorted(majors_df['학부(과)'].dropna().unique().tolist())
         selected_depts = st.multiselect("전공 학부(과)를 모두 선택하세요.", departments)
@@ -105,28 +106,42 @@ if master_df is not None:
                         st.session_state.color_map[selected_row['교과목명']] = generate_random_color()
                     st.success(f"'{selected_row['교과목명']}' 과목을 추가했습니다.")
                     st.rerun()
+
     with tab_general:
         general_df = available_df[available_df['type'] == '교양']
-        categories = sorted(general_df['이수구분'].dropna().unique().tolist())
-        selected_cat = st.selectbox("교양 이수구분을 선택하세요.", categories, key="cat_select")
-        if selected_cat:
-            df_by_cat = general_df[general_df['이수구분'] == selected_cat]
+        
+        # --- 여기가 수정된 교양 필터 ---
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            categories = sorted(general_df['이수구분'].dropna().unique().tolist())
+            selected_cat = st.selectbox("이수구분", categories, key="cat_select")
+        
+        df_by_cat = general_df[general_df['이수구분'] == selected_cat]
+        with col2:
             areas = sorted(df_by_cat['영역구분'].dropna().unique().tolist())
-            selected_area = st.selectbox("영역구분을 선택하세요.", ["전체"] + areas, key="area_select")
-            filtered_gen_df = df_by_cat if selected_area == "전체" else df_by_cat[df_by_cat['영역구분'] == selected_area]
-            course_options_gen = filtered_gen_df.apply(lambda x: f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}", axis=1).tolist()
-            if not course_options_gen:
-                st.warning("해당 조건에 현재 추가 가능한 교양 과목이 없습니다.")
-            else:
-                selected_course_str_gen = st.selectbox("추가할 교양 과목 선택", course_options_gen, key="general_select")
-                if st.button("교양 추가", key="add_general"):
-                    selected_row = filtered_gen_df[filtered_gen_df.apply(lambda x: f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}", axis=1) == selected_course_str_gen].iloc[0]
-                    code, no = selected_row['교과목코드'], selected_row['분반']
-                    st.session_state.my_courses.append((code, no))
-                    if selected_row['교과목명'] not in st.session_state.color_map:
-                        st.session_state.color_map[selected_row['교과목명']] = generate_random_color()
-                    st.success(f"'{selected_row['교과목명']}' 과목을 추가했습니다.")
-                    st.rerun()
+            selected_area = st.selectbox("영역구분", ["전체"] + areas, key="area_select")
+
+        df_by_area = df_by_cat if selected_area == "전체" else df_by_cat[df_by_cat['영역구분'] == selected_area]
+        with col3:
+            methods = sorted(df_by_area['수업방법'].dropna().unique().tolist())
+            selected_method = st.selectbox("수업방법", ["전체"] + methods, key="method_select")
+
+        filtered_gen_df = df_by_area if selected_method == "전체" else df_by_area[df_by_area['수업방법'] == selected_method]
+        
+        course_options_gen = filtered_gen_df.apply(lambda x: f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}", axis=1).tolist()
+
+        if not course_options_gen:
+            st.warning("해당 조건에 현재 추가 가능한 교양 과목이 없습니다.")
+        else:
+            selected_course_str_gen = st.selectbox("추가할 교양 과목 선택", course_options_gen, key="general_select")
+            if st.button("교양 추가", key="add_general"):
+                selected_row = filtered_gen_df[filtered_gen_df.apply(lambda x: f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}", axis=1) == selected_course_str_gen].iloc[0]
+                code, no = selected_row['교과목코드'], selected_row['분반']
+                st.session_state.my_courses.append((code, no))
+                if selected_row['교과목명'] not in st.session_state.color_map:
+                    st.session_state.color_map[selected_row['교과목명']] = generate_random_color()
+                st.success(f"'{selected_row['교과목명']}' 과목을 추가했습니다.")
+                st.rerun()
 
     st.divider()
     st.subheader("2. 나의 시간표")
@@ -134,24 +149,20 @@ if master_df is not None:
     if not st.session_state.my_courses:
         st.info("과목을 추가하면 시간표가 여기에 표시됩니다.")
     else:
-        # --- 여기가 수정된 시간표 생성 로직 ---
+        # (시간표 HTML 생성 및 표시는 이전과 동일)
         days = ['월', '화', '수', '목', '금', '토']
         my_courses_df = master_df[master_df.set_index(['교과목코드', '분반']).index.isin(st.session_state.my_courses)]
-        
-        # 1. 시간표 데이터 초기화 및 연강 계산
         timetable_data = {}
         for p in range(1, 13):
             for d in days:
                 timetable_data[(p, d)] = {"content": "", "color": "white", "span": 1, "is_visible": True}
-
         for _, course in my_courses_df.iterrows():
             if course['parsed_time']:
                 color = st.session_state.color_map.get(course['교과목명'], "white")
-                content = f"{course['교과목명']}<br>{course['교수명']}<br>{course['강의시간/강의실']}"
+                content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>{course['강의시간/강의실']}"
                 for time_info in course['parsed_time']:
                     periods = sorted(time_info['periods'])
                     if not periods: continue
-                    
                     start_period, block_len = periods[0], 1
                     for i in range(1, len(periods)):
                         if periods[i] == periods[i-1] + 1:
@@ -160,19 +171,12 @@ if master_df is not None:
                             timetable_data[(start_period, time_info['day'])].update({"content": content, "color": color, "span": block_len})
                             for j in range(1, block_len): timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
                             start_period, block_len = periods[i], 1
-                    
                     timetable_data[(start_period, time_info['day'])].update({"content": content, "color": color, "span": block_len})
                     for j in range(1, block_len): timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
-
-        # 2. HTML 생성
         html = """<style>.timetable { width: 100%; border-collapse: collapse; table-layout: fixed; }.timetable th, .timetable td { border: 1px solid #e0e0e0; text-align: center; vertical-align: middle; padding: 5px; height: 80px; font-size: 0.85em; }.timetable th { background-color: #f0f2f6; }</style><table class="timetable"><tr><th width="6%">교시</th><th width="12%">시간</th><th width="13.6%">월</th><th width="13.6%">화</th><th width="13.6%">수</th><th width="13.6%">목</th><th width="13.6%">금</th><th width="13.6%">토</th></tr>"""
         time_map = {p: f"{p+8:02d}:00" for p in range(1, 13)}
-
         for p in range(1, 13):
-            # 행이 연강 블록의 일부이면 그리지 않음
-            if not any(timetable_data[(p, d)]["is_visible"] for d in days):
-                continue
-            
+            if not any(timetable_data[(p, d)]["is_visible"] for d in days): continue
             html += '<tr>'
             html += f'<td>{p}</td><td>{time_map[p]}</td>'
             for d in days:
@@ -180,20 +184,15 @@ if master_df is not None:
                 if cell["is_visible"]:
                     html += f'<td rowspan="{cell["span"]}" style="background-color:{cell["color"]};">{cell["content"]}</td>'
             html += '</tr>'
-        
         html += "</table>"
-        
         total_credits = my_courses_df['학점'].sum()
         st.metric("총 신청 학점", f"{total_credits} 학점")
         st.components.v1.html(html, height=1050, scrolling=True)
-
-        # (이하 미지정 과목 및 선택 목록 표시는 이전과 동일)
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
         if untimed_courses:
             st.write("**[시간 미지정 과목]**")
             for course in untimed_courses: 
                 st.write(f"- [{course['수업방법']}] {course['교과목명']} ({course['교수명']}, {course['학점']}학점)")
-
         st.write("---")
         st.write("**[선택한 과목 목록]**")
         for code, no in st.session_state.my_courses:
