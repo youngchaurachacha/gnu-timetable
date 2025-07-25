@@ -102,47 +102,43 @@ if master_df is not None:
     
     tab_major, tab_general = st.tabs(["🎓 전공 과목 선택", "📚 교양 과목 선택"])
     
-
-# app.py의 with tab_major: 부분을 이 코드로 교체
-
     with tab_major:
         majors_df = available_df[available_df['type'] == '전공']
         
         col1, col2, col3 = st.columns([0.5, 0.2, 0.3])
 
-        # 시작은 필터링되지 않은 전공 데이터프레임
+        # 시작은 필터링되지 않은 전체 전공 데이터
         filtered_df = majors_df
 
-        # --- 필터 1: 학부(과) ---
+        # --- 1. 학과 필터 적용 ---
         with col1:
-            # 현재 filtered_df에서 선택지 생성
             departments = sorted(filtered_df['학부(과)'].dropna().unique().tolist())
             selected_depts = st.multiselect("전공 학부(과)", departments)
-            # 학부(과)가 선택되면 즉시 데이터프레임 필터링
             if selected_depts:
+                # 학과가 선택되면 filtered_df를 즉시 갱신
                 filtered_df = filtered_df[filtered_df['학부(과)'].isin(selected_depts)]
 
-        # --- 필터 2: 학년 ---
+        # --- 2. 학년 필터 적용 (학과 필터링된 결과 기반) ---
         with col2:
-            # 위에서 학부(과)로 필터링된 df에서 학년 선택지 생성
+            # 갱신된 filtered_df에서 학년 목록을 만듦
             grades = sorted(filtered_df['대상학년'].dropna().unique(), key=lambda x: int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 0)
             selected_grade = st.selectbox("학년", ["전체"] + grades, key="grade_select")
-            # 학년이 선택되면 즉시 추가 필터링
             if selected_grade != "전체":
+                # 학년이 선택되면 filtered_df를 다시 갱신
                 filtered_df = filtered_df[filtered_df['대상학년'] == selected_grade]
 
-        # --- 필터 3: 이수구분 ---
+        # --- 3. 이수구분 필터 적용 (학과+학년 필터링된 결과 기반) ---
         with col3:
-            # 위에서 학부(과)와 학년으로 필터링된 df에서 이수구분 선택지 생성
+            # 다시 갱신된 filtered_df에서 이수구분 목록을 만듦
             course_types = filtered_df['이수구분'].dropna().unique().tolist()
             selected_course_type = st.selectbox("이수구분", ["전체"] + course_types, key="course_type_select")
-            # 이수구분이 선택되면 즉시 추가 필터링
             if selected_course_type != "전체":
+                # 이수구분이 선택되면 filtered_df를 최종 갱신
                 filtered_df = filtered_df[filtered_df['이수구분'] == selected_course_type]
         
-        st.write("---") # 구분선 추가
+        st.write("---")
 
-        # --- 4. 과목 선택 로직 (최종 필터링된 df 사용) ---
+        # --- 4. 최종 필터링된 과목 목록 표시 ---
         if not selected_depts:
             st.info("먼저 전공 학부(과)를 선택해주세요.")
         else:
@@ -159,7 +155,7 @@ if master_df is not None:
                         st.session_state.color_map[selected_row['교과목명']] = generate_random_color()
                     st.success(f"'{selected_row['교과목명']}' 과목을 추가했습니다.")
                     st.rerun()
-                    
+
     with tab_general:
         general_df = available_df[available_df['type'] == '교양']
         col1, col2, col3 = st.columns(3)
