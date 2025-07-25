@@ -449,8 +449,13 @@ if master_df is not None:
                 if course['type'] == '교양' and pd.notna(course['영역구분']) and course['영역구분'].strip() != '':
                     area_info = f"/{course['영역구분']}"
 
-                # 이수구분 정보
-                course_type_info = f"[{course['이수구분']}{area_info}]"
+                # 이수구분 정보 (전공 과목의 경우 학년 정보 포함)
+                course_type_info = ""
+                if course['type'] == '전공':
+                    # 여기를 수정하여 학년 정보를 포함
+                    course_type_info = f"[{course['대상학년']}/{course['이수구분']}]"
+                else: # 교양 과목
+                    course_type_info = f"[{course['이수구분']}{area_info}]"
 
                 # 비고 내용 추가
                 remark_display_str = ""
