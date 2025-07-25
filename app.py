@@ -104,15 +104,41 @@ if master_df is not None:
     
     with tab_major:
         majors_df = available_df[available_df['type'] == '전공']
-        departments = sorted(majors_df['학부(과)'].dropna().unique().tolist())
-        selected_depts = st.multiselect("전공 학부(과)를 모두 선택하세요.", departments)
+        
+        # --- 1. 필터링 UI 컬럼으로 분리 ---
+        col1, col2, col3 = st.columns([0.5, 0.2, 0.3])
+        
+        with col1:
+            departments = sorted(majors_df['학부(과)'].dropna().unique().tolist())
+            selected_depts = st.multiselect("전공 학부(과)", departments)
+        
+        # 데이터프레임 필터링을 위한 기본값 설정
+        filtered_df = majors_df
         if selected_depts:
             filtered_df = majors_df[majors_df['학부(과)'].isin(selected_depts)]
+
+        # --- 2. 학년 필터 추가 ---
+        with col2:
+            # '대상학년' 컬럼에서 '학년' 글자 제거하고 숫자만 추출 후 정렬
+            grades = sorted(filtered_df['대상학년'].dropna().unique(), key=lambda x: int(re.search(r'\d+', x).group()))
+            selected_grade = st.selectbox("학년", ["전체"] + grades, key="grade_select")
+            if selected_grade != "전체":
+                filtered_df = filtered_df[filtered_df['대상학년'] == selected_grade]
+
+        # --- 3. 이수구분 필터 추가 ---
+        with col3:
+            course_types = filtered_df['이수구분'].dropna().unique().tolist()
+            selected_course_type = st.selectbox("이수구분", ["전체"] + course_types, key="course_type_select")
+            if selected_course_type != "전체":
+                filtered_df = filtered_df[filtered_df['이수구분'] == selected_course_type]
+        
+        # --- 4. 과목 선택 로직 (기존과 동일) ---
+        if selected_depts:
             course_options = filtered_df.apply(lambda x: f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반) / {format_time_for_display(x['parsed_time'])}", axis=1).tolist()
             if not course_options:
-                st.warning("선택한 학부에 현재 추가 가능한 전공 과목이 없습니다.")
+                st.warning("선택한 조건에 현재 추가 가능한 전공 과목이 없습니다.")
             else:
-                selected_course_str = st.selectbox("추가할 전공 과목 선택", course_options, key="major_select")
+                selected_course_str = st.selectbox("추가할 전공 과목 선택", course_options, key="major_select", label_visibility="collapsed")
                 if st.button("전공 추가", key="add_major"):
                     selected_row = filtered_df[filtered_df.apply(lambda x: f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반) / {format_time_for_display(x['parsed_time'])}", axis=1) == selected_course_str].iloc[0]
                     code, no = selected_row['교과목코드'], selected_row['분반']
