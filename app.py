@@ -252,12 +252,10 @@ if master_df is not None:
             days_to_display.append('일')
 
         timetable_data = {}
-        # 먼저 모든 칸을 기본값으로 초기화
         for p in range(1, 13):
             for d in days_to_display:
                 timetable_data[(p, d)] = {"content": "", "color": "white", "span": 1, "is_visible": True}
 
-        # 선택된 과목 정보로 데이터 채우기
         for _, course in my_courses_df.iterrows():
             if course['parsed_time']:
                 color = st.session_state.color_map.get(course['교과목명'], "white")
@@ -312,7 +310,6 @@ if master_df is not None:
 
         time_map = {p: f"{p+8:02d}:00" for p in range(1, 13)}
         
-        # 마지막 교시가 몇 교시인지 계산
         last_period = 0
         if not my_courses_df.empty:
             for _, course in my_courses_df.iterrows():
@@ -337,9 +334,9 @@ if master_df is not None:
         
         total_credits = my_courses_df['학점'].sum()
         st.metric("총 신청 학점", f"{total_credits} 학점")
-        # 컴포넌트 높이를 늘려 스크롤 없이 보이도록 조정
-        st.components.v1.html(html, height=(display_until * 55) + 40, scrolling=False)
-
+        # 높이 계산을 넉넉하게 하고, 넘칠 경우 스크롤이 생기도록 수정
+        st.components.v1.html(html, height=(display_until * 52) + 60, scrolling=True)
+        
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
         if untimed_courses:
             st.write("**[시간 미지정 과목]**")
