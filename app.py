@@ -386,7 +386,7 @@ if master_df is not None:
             html += f'<th width="{day_col_width}%">{d}</th>'
         html += '</tr>'
 
-        time_map = {p: f"{p+8:02d}:00" for p in range(1, 13)} # 13교시까지 데이터가 있을 수 있으니 time_map은 유지
+        time_map = {p: f"{p+8:02d}:00" for p in range(1, final_display_max_period + 1)}
         
         # 최종 표시될 최대 교시까지 반복하여 HTML 테이블 행 생성
         for p in range(1, final_display_max_period + 1): # <-- 이 부분을 final_display_max_period 사용
