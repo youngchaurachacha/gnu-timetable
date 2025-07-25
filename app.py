@@ -139,10 +139,15 @@ if master_df is not None:
         if not selected_depts:
             st.info("먼저 전공 학부(과)를 선택해주세요.")
         else:
+            # =======================================================================
+            # 여기가 수정된 전공 과목 정렬 로직
+            # =======================================================================
             if not final_filtered_df.empty:
+                # 정렬을 위한 임시 학년 숫자 컬럼 생성
                 temp_df = final_filtered_df.copy()
                 temp_df['grade_num'] = temp_df['대상학년'].str.extract(r'(\d+)').astype(float).fillna(99)
                 
+                # 1.학년, 2.이수구분(전필 우선), 3.과목명 순으로 정렬
                 sorted_df = temp_df.sort_values(
                     by=['grade_num', '이수구분', '교과목명'],
                     ascending=[True, False, True]
@@ -259,6 +264,7 @@ if master_df is not None:
                         continue
                     
                     content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>{time_info['room']}"
+                    
                     periods = sorted(time_info['periods'])
                     if not periods: continue
                     
@@ -276,7 +282,7 @@ if master_df is not None:
                     for j in range(1, block_len):
                         if start_period + j <= 12: timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
 
-        day_col_width = (100 - 5 - 10) / len(days_to_display)
+        day_col_width = (100 - 6 - 12) / len(days_to_display)
         html = f"""
         <style>
         .timetable {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
@@ -284,37 +290,30 @@ if master_df is not None:
             border: 1px solid #e0e0e0; 
             text-align: center; 
             vertical-align: middle; 
-            padding: 2px;
-            height: 50px;
-            font-size: 0.75em;
+            padding: 4px; 
+            height: 65px;
+            font-size: 0.8em;
             overflow: hidden;
             text-overflow: ellipsis;
-            word-break: keep-all;
         }}
-        .timetable th {{ background-color: #f0f2f6; font-weight: bold; }}
+        .timetable th {{ background-color: #f0f2f6; }}
         </style>
         <table class="timetable">
         <tr>
-        <th width="5%">교시</th>
-        <th width="10%">시간</th>
+        <th width="6%">교시</th>
+        <th width="12%">시간</th>
         """
         for d in days_to_display:
             html += f'<th width="{day_col_width}%">{d}</th>'
         html += '</tr>'
 
         time_map = {p: f"{p+8:02d}:00" for p in range(1, 13)}
-        
-        last_period = 0
-        if not my_courses_df.empty:
-            for _, course in my_courses_df.iterrows():
-                for time_info in course['parsed_time']:
-                    if time_info['periods']:
-                        last_period = max(last_period, max(time_info['periods']))
-        display_until = max(9, last_period)
-
-        for p in range(1, display_until + 1):
+        for p in range(1, 13):
+            is_row_visible = any(timetable_data.get((p, d), {}).get("is_visible", False) for d in days_to_display)
+            if not is_row_visible: continue
+            
             html += '<tr>'
-            html += f'<td>{p}</td><td>{time_map.get(p, "")}</td>'
+            html += f'<td>{p}</td><td>{time_map[p]}</td>'
             for d in days_to_display:
                 cell = timetable_data.get((p, d))
                 if cell and cell["is_visible"]:
@@ -325,18 +324,13 @@ if master_df is not None:
         
         total_credits = my_courses_df['학점'].sum()
         st.metric("총 신청 학점", f"{total_credits} 학점")
-        
-        # --- 여기가 수정된 부분 ---
-        # 셀 높이(50px) + 패딩/보더(약 5px)를 곱하고, 헤더 높이(약 60px)를 더해 넉넉하게 계산
-        table_height = (display_until * 55) + 60
-        st.components.v1.html(html, height=table_height, scrolling=False)
+        st.components.v1.html(html, height=900, scrolling=True)
 
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
         if untimed_courses:
             st.write("**[시간 미지정 과목]**")
             for course in untimed_courses: 
                 st.write(f"- [{course['수업방법']}] {course['교과목명']} ({course['교수명']}, {course['학점']}학점)")
-        
         st.write("---")
         st.write("**[선택한 과목 목록]**")
         for code, no in st.session_state.my_courses:
