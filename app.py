@@ -108,17 +108,13 @@ if master_df is not None:
                     st.rerun()
 
     with tab_general:
+        # (교양 탭 로직은 이전과 동일)
         general_df = available_df[available_df['type'] == '교양']
-        
-        # --- 여기가 수정된 교양 필터 ---
         col1, col2, col3 = st.columns(3)
         with col1:
             categories = sorted(general_df['이수구분'].dropna().unique().tolist())
             selected_cat = st.selectbox("이수구분", categories, key="cat_select")
-        
         df_by_cat = general_df[general_df['이수구분'] == selected_cat]
-        
-        # '일반선택'일 경우 추가 필터 제공
         if selected_cat == '일반선택':
             sub_cat_options = ['전체', '꿈·미래개척', '그 외 일반선택']
             selected_sub_cat = st.selectbox("일반선택 세부 유형", sub_cat_options, key="sub_cat_select")
@@ -126,23 +122,18 @@ if master_df is not None:
                 df_by_cat = df_by_cat[df_by_cat['교과목명'] == '꿈·미래개척']
             elif selected_sub_cat == '그 외 일반선택':
                 df_by_cat = df_by_cat[df_by_cat['교과목명'] != '꿈·미래개척']
-        
         with col2:
             areas = sorted(df_by_cat['영역구분'].dropna().unique().tolist())
-            if areas: # 영역구분 데이터가 있을 때만 필터 표시
+            if areas:
                 selected_area = st.selectbox("영역구분", ["전체"] + areas, key="area_select")
                 df_by_area = df_by_cat if selected_area == "전체" else df_by_cat[df_by_cat['영역구분'] == selected_area]
             else:
                 df_by_area = df_by_cat
-
         with col3:
             methods = sorted(df_by_area['수업방법'].dropna().unique().tolist())
             selected_method = st.selectbox("수업방법", ["전체"] + methods, key="method_select")
-
         filtered_gen_df = df_by_area if selected_method == "전체" else df_by_area[df_by_area['수업방법'] == selected_method]
-        
         course_options_gen = filtered_gen_df.apply(lambda x: f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}", axis=1).tolist()
-
         if not course_options_gen:
             st.warning("해당 조건에 현재 추가 가능한 교양 과목이 없습니다.")
         else:
@@ -162,45 +153,58 @@ if master_df is not None:
     if not st.session_state.my_courses:
         st.info("과목을 추가하면 시간표가 여기에 표시됩니다.")
     else:
-        # (시간표 HTML 생성 및 표시는 이전과 동일)
+        # --- 여기가 수정된 시간표 생성 로직 ---
         days = ['월', '화', '수', '목', '금', '토']
         my_courses_df = master_df[master_df.set_index(['교과목코드', '분반']).index.isin(st.session_state.my_courses)]
+        
         timetable_data = {}
         for p in range(1, 13):
             for d in days:
                 timetable_data[(p, d)] = {"content": "", "color": "white", "span": 1, "is_visible": True}
+
         for _, course in my_courses_df.iterrows():
             if course['parsed_time']:
                 color = st.session_state.color_map.get(course['교과목명'], "white")
-                content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>({course['강의시간/강의실']})"
                 for time_info in course['parsed_time']:
+                    # content를 각 시간 블록마다 생성
+                    content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>({time_info['room']})"
                     periods = sorted(time_info['periods'])
                     if not periods: continue
+                    
                     start_period, block_len = periods[0], 1
                     for i in range(1, len(periods)):
                         if periods[i] == periods[i-1] + 1:
                             block_len += 1
                         else:
                             timetable_data[(start_period, time_info['day'])].update({"content": content, "color": color, "span": block_len})
-                            for j in range(1, block_len): timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
+                            for j in range(1, block_len): 
+                                if start_period + j <= 12: timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
                             start_period, block_len = periods[i], 1
+                    
                     timetable_data[(start_period, time_info['day'])].update({"content": content, "color": color, "span": block_len})
-                    for j in range(1, block_len): timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
+                    for j in range(1, block_len):
+                        if start_period + j <= 12: timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
+
         html = """<style>.timetable { width: 100%; border-collapse: collapse; table-layout: fixed; }.timetable th, .timetable td { border: 1px solid #e0e0e0; text-align: center; vertical-align: middle; padding: 5px; height: 80px; font-size: 0.85em; }.timetable th { background-color: #f0f2f6; }</style><table class="timetable"><tr><th width="6%">교시</th><th width="12%">시간</th><th width="13.6%">월</th><th width="13.6%">화</th><th width="13.6%">수</th><th width="13.6%">목</th><th width="13.6%">금</th><th width="13.6%">토</th></tr>"""
         time_map = {p: f"{p+8:02d}:00" for p in range(1, 13)}
         for p in range(1, 13):
             if not any(timetable_data[(p, d)]["is_visible"] for d in days): continue
+            
             html += '<tr>'
+            # 교시와 시간은 rowspan을 적용하지 않고, 각 행마다 표시
             html += f'<td>{p}</td><td>{time_map[p]}</td>'
             for d in days:
                 cell = timetable_data[(p, d)]
                 if cell["is_visible"]:
                     html += f'<td rowspan="{cell["span"]}" style="background-color:{cell["color"]};">{cell["content"]}</td>'
             html += '</tr>'
+        
         html += "</table>"
+        
         total_credits = my_courses_df['학점'].sum()
         st.metric("총 신청 학점", f"{total_credits} 학점")
         st.components.v1.html(html, height=1050, scrolling=True)
+
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
         if untimed_courses:
             st.write("**[시간 미지정 과목]**")
