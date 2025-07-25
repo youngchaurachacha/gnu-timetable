@@ -251,11 +251,14 @@ if master_df is not None:
 
         st.write("---")
         
-        sorted_gen_df = final_filtered_gen_df.sort_values(
-            by=['수업방법', '교과목명'], ascending=[False, True]
-        )
-        
-        course_options_gen = sorted_gen_df.apply(format_general_display_string, axis=1).tolist()
+        if not final_filtered_gen_df.empty: # DataFrame이 비어있지 않을 때만 정렬 및 apply 수행
+            sorted_gen_df = final_filtered_gen_df.sort_values(
+                by=['수업방법', '교과목명'], ascending=[False, True]
+            )
+            course_options_gen = sorted_gen_df.apply(format_general_display_string, axis=1).tolist()
+        else: # DataFrame이 비어있으면 빈 리스트로 초기화
+            sorted_gen_df = final_filtered_gen_df # 빈 DataFrame 유지
+            course_options_gen = []
         
         if not course_options_gen:
             st.warning("해당 조건에 현재 추가 가능한 교양 과목이 없습니다.")
