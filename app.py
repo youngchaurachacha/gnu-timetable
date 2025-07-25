@@ -235,7 +235,7 @@ if master_df is not None:
     st.divider()
     st.subheader("2. 나의 시간표")
 
-if not st.session_state.my_courses:
+    if not st.session_state.my_courses:
         st.info("과목을 추가하면 시간표가 여기에 표시됩니다.")
     else:
         my_courses_df = master_df[master_df.set_index(['교과목코드', '분반']).index.isin(st.session_state.my_courses)]
