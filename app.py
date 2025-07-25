@@ -10,6 +10,9 @@ st.title("👨‍💻 경상국립대학교 시간표 도우미")
 
 @st.cache_data
 def load_and_process_data(file_path, major_sheet, general_sheet):
+    """
+    원본 엑셀 파일에서 데이터를 읽고, 학년 정보를 포함하여 처리한다.
+    """
     try:
         df_major = pd.read_excel(file_path, sheet_name=major_sheet)
         df_general = pd.read_excel(file_path, sheet_name=general_sheet)
@@ -17,14 +20,17 @@ def load_and_process_data(file_path, major_sheet, general_sheet):
         st.error(f"엑셀 파일을 읽는 중 오류 발생: {e}")
         return None
 
+    # 교양 과목 처리
     df_general_p = df_general[['교과목명', '교수명', '학점', '이수구분', '학과', '수강반번호', '강의시간/강의실', '캠퍼스구분', '교과목코드']].copy()
     df_general_p.rename(columns={'학과': '학부(과)', '수강반번호': '분반'}, inplace=True)
-    df_general_p['type'] = '교양' # 교양 과목 구분
+    df_general_p['type'] = '교양'
 
-    df_major_p = df_major[['교과목명', '교수명', '학점', '이수구분', '학부(과)', '분반', '강의시간/강의실', '캠퍼스구분', '교과목코드']].copy()
-    df_major_p['type'] = '전공' # 전공 과목 구분
+    # 전공 과목 처리 (대상학년 컬럼 추가)
+    df_major_p = df_major[['교과목명', '교수명', '학점', '이수구분', '학부(과)', '대상학년', '분반', '강의시간/강의실', '캠퍼스구분', '교과목코드']].copy()
+    df_major_p['type'] = '전공'
 
     df_combined = pd.concat([df_general_p, df_major_p], ignore_index=True).dropna(subset=['교과목코드', '분반'])
+    df_combined['대상학년'] = df_combined['대상학년'].fillna('') # 교양 과목의 빈 학년 정보 처리
     df_combined['교과목코드'] = df_combined['교과목코드'].astype(int)
     df_combined['분반'] = df_combined['분반'].astype(int)
     
@@ -70,24 +76,20 @@ if master_df is not None:
 
     st.subheader("1. 과목 선택")
     
-    # 탭 생성
     tab_major, tab_general = st.tabs(["🎓 전공 과목 선택", "📚 교양 과목 선택"])
 
-    # 전공 과목 선택 탭
     with tab_major:
         majors_df = master_df[master_df['type'] == '전공']
         departments = sorted(majors_df['학부(과)'].dropna().unique().tolist())
-        
-        # 복수전공 고려 -> 여러 학과 선택 가능
         selected_depts = st.multiselect("전공 학부(과)를 모두 선택하세요.", departments)
 
         if selected_depts:
             filtered_df = majors_df[majors_df['학부(과)'].isin(selected_depts)]
-            course_options = filtered_df.apply(lambda x: f"{x['교과목명']} ({x['교수명']}, {x['분반']}반)", axis=1).tolist()
+            course_options = filtered_df.apply(lambda x: f"[{x['대상학년']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반)", axis=1).tolist()
             selected_course_str = st.selectbox("추가할 전공 과목 선택", course_options, key="major_select")
             
             if st.button("전공 추가", key="add_major"):
-                selected_row = filtered_df[filtered_df.apply(lambda x: f"{x['교과목명']} ({x['교수명']}, {x['분반']}반)", axis=1) == selected_course_str].iloc[0]
+                selected_row = filtered_df[filtered_df.apply(lambda x: f"[{x['대상학년']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반)", axis=1) == selected_course_str].iloc[0]
                 code, no = selected_row['교과목코드'], selected_row['분반']
                 if (code, no) in st.session_state.my_courses:
                     st.warning("이미 추가된 과목입니다.")
@@ -101,7 +103,6 @@ if master_df is not None:
         else:
             st.info("먼저 전공 학부(과)를 선택해주세요.")
 
-    # 교양 과목 선택 탭
     with tab_general:
         general_df = master_df[master_df['type'] == '교양']
         course_options_gen = general_df.apply(lambda x: f"{x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점)", axis=1).tolist()
@@ -120,7 +121,6 @@ if master_df is not None:
                     st.session_state.my_courses.append((code, no))
                     st.success(f"'{selected_row['교과목명']}' 과목을 추가했습니다.")
 
-    # --- 시간표 및 선택 과목 목록 (탭과 무관하게 항상 표시) ---
     st.divider()
     st.subheader("2. 나의 시간표")
 
@@ -158,7 +158,8 @@ if master_df is not None:
             course = master_df[(master_df['교과목코드'] == code) & (master_df['분반'] == no)].iloc[0]
             col1, col2 = st.columns([0.8, 0.2])
             with col1:
-                st.write(f"- {course['교과목명']} ({course['교수명']}, {course['분반']}반) [{course['type']}]")
+                grade_info = f"[{course['대상학년']}] " if course['type'] == '전공' else ""
+                st.write(f"- {grade_info}{course['교과목명']} ({course['교수명']}, {course['분반']}반) [{course['type']}]")
             with col2:
                 if st.button("제거", key=f"del-{code}-{no}"):
                     st.session_state.my_courses.remove((code, no))
