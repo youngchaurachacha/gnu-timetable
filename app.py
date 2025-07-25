@@ -120,10 +120,16 @@ def generate_random_color():
 
 def format_major_display_string(x):
     """전공 과목 선택 목록에 표시될 문자열을 포맷하는 함수"""
-    base_str = f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반) / {format_time_for_display(x['parsed_time'])}"
+    # 전공 과목도 교양처럼 교수명, 분반, 학점 표시
+    base_str = f"[{x['대상학년']}/{x['이수구분']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+    
     # 수업 방법이 '대면'/'혼합'을 포함하고, 캠퍼스구분 값이 실제로 존재할 경우에만 캠퍼스 정보 추가
-    if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']):
-        base_str += f" / {x['캠퍼스구분']}"
+    if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']) and x['캠퍼스구분'].strip() != '':
+        base_str = f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}({x['캠퍼스구분']})] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+    else:
+        # 비대면 등 캠퍼스 정보가 없는 경우
+        base_str = f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+        
     # 비고 내용이 있다면 추가
     if pd.notna(x['비고']) and x['비고'].strip() != '':
         base_str += f" / 비고: {x['비고']}"
@@ -131,10 +137,16 @@ def format_major_display_string(x):
 
 def format_general_display_string(x):
     """교양 과목 선택 목록에 표시될 문자열을 포맷하는 함수"""
-    base_str = f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
-    # 수업 방법이 '대면'/'혼합'을 포함하고, 캠퍼스구분 값이 실제로 존재할 경우에만 캠퍼스 정보 추가
-    if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']):
-        base_str += f" / {x['캠퍼스구분']}"
+    # 균형교양/핵심교양의 경우 영역 구분도 선택란에 뜨도록 수정
+    # 캠퍼스는 수업(캠퍼스)로 되게끔 수정
+    campus_info = ""
+    if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']) and x['캠퍼스구분'].strip() != '':
+        campus_info = f"({x['캠퍼스구분']})"
+    
+    area_info = f"/{x['영역구분']}" if x['영역구분'] and x['영역구분'].strip() != '' else ""
+
+    base_str = f"[{x['이수구분']}{area_info}/{x['수업방법']}{campus_info}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+
     # 비고 내용이 있다면 추가
     if pd.notna(x['비고']) and x['비고'].strip() != '':
         base_str += f" / 비고: {x['비고']}"
@@ -421,25 +433,36 @@ if master_df is not None:
             col1, col2 = st.columns([0.8, 0.2])
             with col1:
                 # 전공/교양에 따라 기본 정보 문자열 생성
-                grade_info = f"[{course['대상학년']}/{course['이수구분']}] " if course['type'] == '전공' else f"[{course['이수구분']}] "
+                # 수정된 부분: 아래 출력 형식은 이미 위에서 format_major_display_string, format_general_display_string으로 처리되므로,
+                # 이 부분에서는 간단하게 과목명, 교수명, 학점, 분반, 수업방식(캠퍼스), 비고를 포함하도록 재구성
                 
-                # 수업방법 및 캠퍼스 정보 포맷팅을 위한 변수
-                method_display_str = ""
-                # '대면' 또는 '혼합' 수업이고, 캠퍼스구분 값이 실제로 존재할 경우
-                if ('대면' in course['수업방법'] or '혼합' in course['수업방법']) and pd.notna(course['캠퍼스구분']):
-                    # '|'를 사용해 캠퍼스 정보를 합쳐서 포맷
-                    method_display_str = f"**[{course['수업방법']}|{course['캠퍼스구분']}]**"
-                else:
-                    # 그 외의 경우(비대면 등)는 기존처럼 수업방법만 표시
-                    method_display_str = f"**[{course['수업방법']}]**"
+                # 수업방법 및 캠퍼스 정보 포맷팅
+                method_campus_info = ""
+                if pd.notna(course['수업방법']) and course['수업방법'].strip() != '':
+                    if ('대면' in course['수업방법'] or '혼합' in course['수업방법']) and pd.notna(course['캠퍼스구분']) and course['캠퍼스구분'].strip() != '':
+                        method_campus_info = f"[{course['수업방법']}({course['캠퍼스구분']})]"
+                    else:
+                        method_campus_info = f"[{course['수업방법']}]"
 
-                # 비고 내용 추가 (추가된 부분)
+                # 영역구분 정보 (교양 과목일 경우에만)
+                area_info = ""
+                if course['type'] == '교양' and pd.notna(course['영역구분']) and course['영역구분'].strip() != '':
+                    area_info = f"/{course['영역구분']}"
+
+                # 이수구분 정보
+                course_type_info = f"[{course['이수구분']}{area_info}]"
+
+                # 비고 내용 추가
                 remark_display_str = ""
                 if pd.notna(course['비고']) and course['비고'].strip() != '':
                     remark_display_str = f" / **[비고: {course['비고']}]**"
 
                 # 최종으로 화면에 표시될 문자열 생성
-                display_str = f"- {grade_info}{course['교과목명']} ({course['교수명']}, {course['학점']}학점) {method_display_str}{remark_display_str}"
+                display_str = (
+                    f"- {course_type_info} {course['교과목명']} "
+                    f"({course['교수명']}, {course['분반']}반, {course['학점']}학점) "
+                    f"{method_campus_info}{remark_display_str}"
+                )
                 
                 # 완성된 문자열을 출력
                 st.write(display_str)
