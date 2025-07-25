@@ -21,8 +21,19 @@ def load_and_process_data(file_path, major_sheet, general_sheet):
         st.error(f"엑셀 파일을 읽는 중 오류 발생: {e}")
         return None
 
-    general_cols = ['교과목명', '교수명', '학점', '이수구분', '영역구분', '학과', '수강반번호', '강의시간/강의실', '캠퍼스구분', '교과목코드', '수업방법']
-    major_cols = ['교과목명', '교수명', '학점', '이수구분', '학부(과)', '대상학년', '분반', '강의시간/강의실', '캠퍼스구분', '교과목코드', '수업방법']
+    # '비고' 컬럼 추가 (엑셀 파일에 '비고' 열이 있어야 함)
+    general_cols = ['교과목명', '교수명', '학점', '이수구분', '영역구분', '학과', '수강반번호', '강의시간/강의실', '캠퍼스구분', '교과목코드', '수업방법', '비고']
+    major_cols = ['교과목명', '교수명', '학점', '이수구분', '학부(과)', '대상학년', '분반', '강의시간/강의실', '캠퍼스구분', '교과목코드', '수업방법', '비고']
+
+    # 엑셀 파일에 해당 컬럼이 실제로 있는지 확인하고, 없으면 빈 값으로 처리
+    # 이렇게 해야 '비고' 컬럼이 없어도 에러 없이 작동한다.
+    for col in general_cols:
+        if col not in df_general.columns:
+            df_general[col] = ''
+    for col in major_cols:
+        if col not in df_major.columns:
+            df_major[col] = ''
+
 
     df_general_p = df_general[general_cols].copy()
     df_general_p.rename(columns={'학과': '학부(과)', '수강반번호': '분반'}, inplace=True)
@@ -33,6 +44,8 @@ def load_and_process_data(file_path, major_sheet, general_sheet):
 
     df_combined = pd.concat([df_general_p, df_major_p], ignore_index=True).dropna(subset=['교과목코드', '분반'])
     df_combined[['대상학년', '영역구분']] = df_combined[['대상학년', '영역구분']].fillna('')
+    # '비고' 컬럼도 NaN을 빈 문자열로 채워줘서 추후 출력 시 'nan'이 뜨는 것을 방지한다.
+    df_combined['비고'] = df_combined['비고'].fillna('') 
     df_combined['교과목코드'] = df_combined['교과목코드'].astype(int)
     df_combined['분반'] = df_combined['분반'].astype(int)
     
@@ -111,6 +124,9 @@ def format_major_display_string(x):
     # 수업 방법이 '대면'/'혼합'을 포함하고, 캠퍼스구분 값이 실제로 존재할 경우에만 캠퍼스 정보 추가
     if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']):
         base_str += f" / {x['캠퍼스구분']}"
+    # 비고 내용이 있다면 추가
+    if pd.notna(x['비고']) and x['비고'].strip() != '':
+        base_str += f" / 비고: {x['비고']}"
     return base_str
 
 def format_general_display_string(x):
@@ -119,6 +135,9 @@ def format_general_display_string(x):
     # 수업 방법이 '대면'/'혼합'을 포함하고, 캠퍼스구분 값이 실제로 존재할 경우에만 캠퍼스 정보 추가
     if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']):
         base_str += f" / {x['캠퍼스구분']}"
+    # 비고 내용이 있다면 추가
+    if pd.notna(x['비고']) and x['비고'].strip() != '':
+        base_str += f" / 비고: {x['비고']}"
     return base_str
 
 # --- 웹앱 UI 및 로직 ---
@@ -177,15 +196,10 @@ if master_df is not None:
         if not selected_depts:
             st.info("먼저 전공 학부(과)를 선택해주세요.")
         else:
-            # =======================================================================
-            # 여기가 수정된 전공 과목 정렬 로직
-            # =======================================================================
             if not final_filtered_df.empty:
-                # 정렬을 위한 임시 학년 숫자 컬럼 생성
                 temp_df = final_filtered_df.copy()
                 temp_df['grade_num'] = temp_df['대상학년'].str.extract(r'(\d+)').astype(float).fillna(99)
                 
-                # 1.학년, 2.이수구분(전필 우선), 3.과목명 순으로 정렬
                 sorted_df = temp_df.sort_values(
                     by=['grade_num', '이수구분', '교과목명'],
                     ascending=[True, False, True]
@@ -292,11 +306,11 @@ if master_df is not None:
         if '일' in all_class_days: days_to_display.append('일')
 
         # 2. 최대 교시 동적으로 계산
-        max_period = 12  # 기본값 12교시
+        max_period = 9   # 기본값 9교시
         all_periods = [p for _, course in my_courses_df.iterrows() for time_info in course['parsed_time'] for p in time_info['periods']]
         if all_periods:
-            # 실제 데이터의 최대 교시가 12보다 크면 그 값을 사용
-            if max(all_periods) > 12:
+            # 실제 데이터의 최대 교시가 9보다 크면 그 값을 사용
+            if max(all_periods) > 9:
                 max_period = max(all_periods)
 
         # 3. 동적으로 계산된 최대 교시에 맞춰 시간표 격자 생성
@@ -394,7 +408,9 @@ if master_df is not None:
         if untimed_courses:
             st.write("**[시간 미지정 과목]**")
             for course in untimed_courses: 
-                st.write(f"- [{course['수업방법']}] {course['교과목명']} ({course['교수명']}, {course['학점']}학점)")
+                # 시간 미지정 과목에도 비고 정보 추가
+                remark_display = f" / 비고: {course['비고']}" if pd.notna(course['비고']) and course['비고'].strip() != '' else ''
+                st.write(f"- [{course['수업방법']}] {course['교과목명']} ({course['교수명']}, {course['학점']}학점){remark_display}")
         st.write("---")
         st.write("**[선택한 과목 목록]**")
         for code, no in st.session_state.my_courses:
@@ -414,8 +430,13 @@ if master_df is not None:
                     # 그 외의 경우(비대면 등)는 기존처럼 수업방법만 표시
                     method_display_str = f"**[{course['수업방법']}]**"
 
+                # 비고 내용 추가 (추가된 부분)
+                remark_display_str = ""
+                if pd.notna(course['비고']) and course['비고'].strip() != '':
+                    remark_display_str = f" / **[비고: {course['비고']}]**"
+
                 # 최종으로 화면에 표시될 문자열 생성
-                display_str = f"- {grade_info}{course['교과목명']} ({course['교수명']}, {course['학점']}학점) {method_display_str}"
+                display_str = f"- {grade_info}{course['교과목명']} ({course['교수명']}, {course['학점']}학점) {method_display_str}{remark_display_str}"
                 
                 # 완성된 문자열을 출력
                 st.write(display_str)
