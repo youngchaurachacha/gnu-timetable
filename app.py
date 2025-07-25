@@ -262,9 +262,8 @@ if master_df is not None:
                 for time_info in course['parsed_time']:
                     if time_info['day'] not in days_to_display:
                         continue
-                    
+                        
                     content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>{time_info['room']}"
-                    
                     periods = sorted(time_info['periods'])
                     if not periods: continue
                     
@@ -282,7 +281,7 @@ if master_df is not None:
                     for j in range(1, block_len):
                         if start_period + j <= 12: timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
 
-        day_col_width = (100 - 6 - 12) / len(days_to_display)
+        day_col_width = (100 - 5 - 10) / len(days_to_display)
         html = f"""
         <style>
         .timetable {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
@@ -290,30 +289,40 @@ if master_df is not None:
             border: 1px solid #e0e0e0; 
             text-align: center; 
             vertical-align: middle; 
-            padding: 4px; 
-            height: 65px;
-            font-size: 0.8em;
+            padding: 2px;
+            height: 50px;
+            font-size: 0.75em;
             overflow: hidden;
             text-overflow: ellipsis;
+            word-break: keep-all;
         }}
-        .timetable th {{ background-color: #f0f2f6; }}
+        .timetable th {{ background-color: #f0f2f6; font-weight: bold; }}
         </style>
         <table class="timetable">
         <tr>
-        <th width="6%">교시</th>
-        <th width="12%">시간</th>
+        <th width="5%">교시</th>
+        <th width="10%">시간</th>
         """
         for d in days_to_display:
             html += f'<th width="{day_col_width}%">{d}</th>'
         html += '</tr>'
 
         time_map = {p: f"{p+8:02d}:00" for p in range(1, 13)}
-        for p in range(1, 13):
-            is_row_visible = any(timetable_data.get((p, d), {}).get("is_visible", False) for d in days_to_display)
-            if not is_row_visible: continue
-            
+        
+        # --- 여기가 수정된 부분 ---
+        last_period = 0
+        if not my_courses_df.empty:
+            for _, course in my_courses_df.iterrows():
+                for time_info in course['parsed_time']:
+                    if time_info['periods']:
+                        last_period = max(last_period, max(time_info['periods']))
+        
+        # 과목이 있으면 마지막 교시까지, 없으면 9교시까지 표시
+        display_until = last_period if last_period > 0 else 9
+
+        for p in range(1, display_until + 1):
             html += '<tr>'
-            html += f'<td>{p}</td><td>{time_map[p]}</td>'
+            html += f'<td>{p}</td><td>{time_map.get(p, "")}</td>'
             for d in days_to_display:
                 cell = timetable_data.get((p, d))
                 if cell and cell["is_visible"]:
@@ -324,7 +333,9 @@ if master_df is not None:
         
         total_credits = my_courses_df['학점'].sum()
         st.metric("총 신청 학점", f"{total_credits} 학점")
-        st.components.v1.html(html, height=900, scrolling=True)
+        
+        table_height = (display_until * 55) + 60
+        st.components.v1.html(html, height=table_height, scrolling=False)
 
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
         if untimed_courses:
