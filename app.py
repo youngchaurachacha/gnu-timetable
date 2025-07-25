@@ -251,7 +251,7 @@ if master_df is not None:
                     if time_info['day'] not in days_to_display:
                         continue
                         
-                    content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>({time_info['room']})"
+                    content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>{time_info['room']}"
                     periods = sorted(time_info['periods'])
                     if not periods: continue
                     
