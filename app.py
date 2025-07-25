@@ -472,45 +472,14 @@ if master_df is not None:
             course = master_df[(master_df['교과목코드'] == code) & (master_df['분반'] == no)].iloc[0]
             col1, col2 = st.columns([0.8, 0.2])
             with col1:
-                # 수업방법 및 캠퍼스 정보 포맷팅
-                method_campus_info = ""
-                if pd.notna(course['수업방법']) and course['수업방법'].strip() != '':
-                    if ('대면' in course['수업방법'] or '혼합' in course['수업방법']) and pd.notna(course['캠퍼스구분']) and course['캠퍼스구분'].strip() != '':
-                        method_campus_info = f"/{course['수업방법']}({course['캠퍼스구분']})"
-                    else:
-                        method_campus_info = f"/{course['수업방법']}"
-                
-                # 원격 강의 구분 정보 추가 (비대면 또는 혼합 수업일 경우)
-                remote_info = ""
-                if ('비대면' in course['수업방법'] or '혼합' in course['수업방법']) and pd.notna(course['원격강의구분']) and course['원격강의구분'].strip() != '':
-                    remote_info = f"({course['원격강의구분']})"
-
-                # 영역구분 정보 (교양 과목일 경우에만)
-                area_info = ""
-                if course['type'] == '교양' and pd.notna(course['영역구분']) and course['영역구분'].strip() != '':
-                    area_info = f"/{course['영역구분']}"
-
-                # 이수구분 정보 (전공 과목의 경우 학년 정보 포함)
-                course_type_info = ""
+                # 과목 선택 드롭다운과 동일한 포맷팅 함수 사용
                 if course['type'] == '전공':
-                    course_type_info = f"[{course['대상학년']}/{course['이수구분']}]"
-                else: # 교양 과목
-                    course_type_info = f"[{course['이수구분']}{area_info}]"
-
-                # 비고 내용 추가
-                remark_display_str = ""
-                if pd.notna(course['비고']) and course['비고'].strip() != '':
-                    remark_display_str = f" / **[비고: {course['비고']}]**"
-
-                # 최종으로 화면에 표시될 문자열 생성
-                display_str = (
-                    f"- {course_type_info} {course['교과목명']} "
-                    f"({course['교수명']}, {course['분반']}반, {course['학점']}학점) "
-                    f"{method_campus_info}{remote_info}{remark_display_str}"
-                )
+                    display_str = format_major_display_string(course)
+                else: # 교양
+                    display_str = format_general_display_string(course)
                 
                 # 완성된 문자열을 출력
-                st.write(display_str)
+                st.write(f"- {display_str}")
                 st.caption(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (교과목코드: {code}, 분반: {no})")
             with col2:
                 if st.button("제거", key=f"del-{code}-{no}"):
