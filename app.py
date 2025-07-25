@@ -139,15 +139,10 @@ if master_df is not None:
         if not selected_depts:
             st.info("먼저 전공 학부(과)를 선택해주세요.")
         else:
-            # =======================================================================
-            # 여기가 수정된 전공 과목 정렬 로직
-            # =======================================================================
             if not final_filtered_df.empty:
-                # 정렬을 위한 임시 학년 숫자 컬럼 생성
                 temp_df = final_filtered_df.copy()
                 temp_df['grade_num'] = temp_df['대상학년'].str.extract(r'(\d+)').astype(float).fillna(99)
                 
-                # 1.학년, 2.이수구분(전필 우선), 3.과목명 순으로 정렬
                 sorted_df = temp_df.sort_values(
                     by=['grade_num', '이수구분', '교과목명'],
                     ascending=[True, False, True]
@@ -262,7 +257,7 @@ if master_df is not None:
                 for time_info in course['parsed_time']:
                     if time_info['day'] not in days_to_display:
                         continue
-                        
+                    
                     content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>{time_info['room']}"
                     periods = sorted(time_info['periods'])
                     if not periods: continue
@@ -281,7 +276,6 @@ if master_df is not None:
                     for j in range(1, block_len):
                         if start_period + j <= 12: timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
 
-        # --- 스타일 및 HTML 생성 (사이즈 축소, 모든 행 표시) ---
         day_col_width = (100 - 5 - 10) / len(days_to_display)
         html = f"""
         <style>
@@ -316,16 +310,13 @@ if master_df is not None:
                 for time_info in course['parsed_time']:
                     if time_info['periods']:
                         last_period = max(last_period, max(time_info['periods']))
-        # 기본적으로 최소 9교시까지는 표시
         display_until = max(9, last_period)
 
-        # 1교시부터 마지막 교시까지 모든 행을 그림
         for p in range(1, display_until + 1):
             html += '<tr>'
             html += f'<td>{p}</td><td>{time_map.get(p, "")}</td>'
             for d in days_to_display:
                 cell = timetable_data.get((p, d))
-                # rowspan으로 합쳐진 셀이 아니면 td를 그림
                 if cell and cell["is_visible"]:
                     html += f'<td rowspan="{cell["span"]}" style="background-color:{cell["color"]};">{cell["content"]}</td>'
             html += '</tr>'
@@ -334,14 +325,18 @@ if master_df is not None:
         
         total_credits = my_courses_df['학점'].sum()
         st.metric("총 신청 학점", f"{total_credits} 학점")
-        # 높이 계산을 넉넉하게 하고, 넘칠 경우 스크롤이 생기도록 수정
-        st.components.v1.html(html, height=(display_until * 52) + 60, scrolling=True)
         
+        # --- 여기가 수정된 부분 ---
+        # 셀 높이(50px) + 패딩/보더(약 5px)를 곱하고, 헤더 높이(약 60px)를 더해 넉넉하게 계산
+        table_height = (display_until * 55) + 60
+        st.components.v1.html(html, height=table_height, scrolling=False)
+
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
         if untimed_courses:
             st.write("**[시간 미지정 과목]**")
             for course in untimed_courses: 
                 st.write(f"- [{course['수업방법']}] {course['교과목명']} ({course['교수명']}, {course['학점']}학점)")
+        
         st.write("---")
         st.write("**[선택한 과목 목록]**")
         for code, no in st.session_state.my_courses:
