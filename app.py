@@ -278,22 +278,31 @@ if master_df is not None:
     else:
         my_courses_df = master_df[master_df.set_index(['교과목코드', '분반']).index.isin(st.session_state.my_courses)]
         
+        # 1. 요일 목록 생성
         all_class_days = set()
         for _, course in my_courses_df.iterrows():
             for time_info in course['parsed_time']:
                 all_class_days.add(time_info['day'])
 
         days_to_display = ['월', '화', '수', '목', '금']
-        if '토' in all_class_days:
-            days_to_display.append('토')
-        if '일' in all_class_days:
-            days_to_display.append('일')
+        if '토' in all_class_days: days_to_display.append('토')
+        if '일' in all_class_days: days_to_display.append('일')
 
+        # 2. 최대 교시 동적으로 계산
+        max_period = 12  # 기본값 12교시
+        all_periods = [p for _, course in my_courses_df.iterrows() for time_info in course['parsed_time'] for p in time_info['periods']]
+        if all_periods:
+            # 실제 데이터의 최대 교시가 12보다 크면 그 값을 사용
+            if max(all_periods) > 12:
+                max_period = max(all_periods)
+
+        # 3. 동적으로 계산된 최대 교시에 맞춰 시간표 격자 생성
         timetable_data = {}
-        for p in range(1, 13):
+        for p in range(1, max_period + 1):
             for d in days_to_display:
                 timetable_data[(p, d)] = {"content": "", "color": "white", "span": 1, "is_visible": True}
 
+        # 4. 시간표에 과목 정보 채우기 (KeyError 방지 로직 포함)
         for _, course in my_courses_df.iterrows():
             if course['parsed_time']:
                 color = st.session_state.color_map.get(course['교과목명'], "white")
@@ -310,14 +319,20 @@ if master_df is not None:
                         if periods[i] == periods[i-1] + 1:
                             block_len += 1
                         else:
-                            timetable_data[(start_period, time_info['day'])].update({"content": content, "color": color, "span": block_len})
-                            for j in range(1, block_len): 
-                                if start_period + j <= 12: timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
+                            # 생성된 시간표 격자 안에 있는 키인지 확인 후 업데이트
+                            if (start_period, time_info['day']) in timetable_data:
+                                timetable_data[(start_period, time_info['day'])].update({"content": content, "color": color, "span": block_len})
+                                for j in range(1, block_len): 
+                                    if (start_period + j, time_info['day']) in timetable_data:
+                                        timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
                             start_period, block_len = periods[i], 1
                     
-                    timetable_data[(start_period, time_info['day'])].update({"content": content, "color": color, "span": block_len})
-                    for j in range(1, block_len):
-                        if start_period + j <= 12: timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
+                    # 마지막 시간 블록 처리
+                    if (start_period, time_info['day']) in timetable_data:
+                        timetable_data[(start_period, time_info['day'])].update({"content": content, "color": color, "span": block_len})
+                        for j in range(1, block_len):
+                            if (start_period + j, time_info['day']) in timetable_data:
+                                timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
 
         day_col_width = (100 - 5 - 10) / len(days_to_display)
         html = f"""
