@@ -105,6 +105,22 @@ def generate_random_color():
     """랜덤으로 밝은 톤의 배경색 생성"""
     return f"hsl({random.randint(0, 360)}, 80%, 90%)"
 
+def format_major_display_string(x):
+    """전공 과목 선택 목록에 표시될 문자열을 포맷하는 함수"""
+    base_str = f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반) / {format_time_for_display(x['parsed_time'])}"
+    # 수업 방법이 '대면' 또는 '혼합'을 포함할 경우 캠퍼스 정보 추가
+    if '대면' in x['수업방법'] or '혼합' in x['수업방법']:
+        base_str += f" / {x['캠퍼스구분']}"
+    return base_str
+
+def format_general_display_string(x):
+    """교양 과목 선택 목록에 표시될 문자열을 포맷하는 함수"""
+    base_str = f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+    # 수업 방법이 '대면' 또는 '혼합'을 포함할 경우 캠퍼스 정보 추가
+    if '대면' in x['수업방법'] or '혼합' in x['수업방법']:
+        base_str += f" / {x['캠퍼스구분']}"
+    return base_str
+
 # --- 웹앱 UI 및 로직 ---
 
 excel_file_path = '경상국립대학교 2025학년도 2학기 시간표.xlsx'
@@ -177,14 +193,14 @@ if master_df is not None:
             else:
                 sorted_df = final_filtered_df
 
-            course_options = sorted_df.apply(lambda x: f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반) / {format_time_for_display(x['parsed_time'])}", axis=1).tolist()
+            course_options = sorted_df.apply(format_major_display_string, axis=1).tolist()
             
             if not course_options:
                 st.warning("선택한 조건에 현재 추가 가능한 전공 과목이 없습니다.")
             else:
                 selected_course_str = st.selectbox("추가할 전공 과목 선택", course_options, key="major_select", label_visibility="collapsed")
                 if st.button("전공 추가", key="add_major"):
-                    selected_row = sorted_df[sorted_df.apply(lambda x: f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반) / {format_time_for_display(x['parsed_time'])}", axis=1) == selected_course_str].iloc[0]
+                    selected_row = sorted_df[sorted_df.apply(format_major_display_string, axis=1) == selected_course_str].iloc[0]
                     code, no = selected_row['교과목코드'], selected_row['분반']
                     st.session_state.my_courses.append((code, no))
                     if selected_row['교과목명'] not in st.session_state.color_map:
@@ -239,14 +255,14 @@ if master_df is not None:
             by=['수업방법', '교과목명'], ascending=[False, True]
         )
         
-        course_options_gen = sorted_gen_df.apply(lambda x: f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}", axis=1).tolist()
+        course_options_gen = sorted_gen_df.apply(format_general_display_string, axis=1).tolist()
         
         if not course_options_gen:
             st.warning("해당 조건에 현재 추가 가능한 교양 과목이 없습니다.")
         else:
             selected_course_str_gen = st.selectbox("추가할 교양 과목 선택", course_options_gen, key="general_select", label_visibility="collapsed")
             if st.button("교양 추가", key="add_general"):
-                selected_row = sorted_gen_df[sorted_gen_df.apply(lambda x: f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}", axis=1) == selected_course_str_gen].iloc[0]
+                selected_row = sorted_gen_df[sorted_gen_df.apply(format_general_display_string, axis=1) == selected_course_str_gen].iloc[0]
                 code, no = selected_row['교과목코드'], selected_row['분반']
                 st.session_state.my_courses.append((code, no))
                 if selected_row['교과목명'] not in st.session_state.color_map:
