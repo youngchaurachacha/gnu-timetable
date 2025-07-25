@@ -288,7 +288,7 @@ if master_df is not None:
             width: 100%; 
             border-collapse: collapse; 
             table-layout: fixed; 
-            border-bottom: 1px solid #e0e0e0; 
+            border-bottom: 1px solid #e0e0e0;
         }}
         .timetable th, .timetable td {{ 
             border: 1px solid #e0e0e0; 
@@ -314,18 +314,9 @@ if master_df is not None:
 
         time_map = {p: f"{p+8:02d}:00" for p in range(1, 13)}
         
-        # --- 여기가 수정된 부분 ---
-        last_period = 0
-        if not my_courses_df.empty:
-            for _, course in my_courses_df.iterrows():
-                for time_info in course['parsed_time']:
-                    if time_info['periods']:
-                        last_period = max(last_period, max(time_info['periods']))
-        
-        # 과목이 있으면 마지막 교시까지, 없으면 9교시까지 표시
-        display_until = last_period if last_period > 0 else 9
-
-        for p in range(1, display_until + 1):
+        # --- 여기가 롤백된 부분 ---
+        # 1교시부터 12교시까지 항상 표시하도록 변경
+        for p in range(1, 13):
             html += '<tr>'
             html += f'<td>{p}</td><td>{time_map.get(p, "")}</td>'
             for d in days_to_display:
@@ -339,8 +330,9 @@ if master_df is not None:
         total_credits = my_courses_df['학점'].sum()
         st.metric("총 신청 학점", f"{total_credits} 학점")
         
-        table_height = (display_until * 55) + 60
-        st.components.v1.html(html, height=table_height, scrolling=False)
+        # 12교시 기준 고정 높이, 넘칠 경우 스크롤 표시
+        table_height = (12 * 55) + 60 
+        st.components.v1.html(html, height=table_height, scrolling=True)
 
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
         if untimed_courses:
