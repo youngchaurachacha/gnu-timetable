@@ -139,10 +139,6 @@ if master_df is not None:
         if not selected_depts:
             st.info("먼저 전공 학부(과)를 선택해주세요.")
         else:
-            # =======================================================================
-            # 여기가 오류 수정된 부분
-            # =======================================================================
-            # .str.extract()가 데이터프레임을 반환하므로, [0]으로 첫 번째 열(Series)을 선택해줘야 함
             sorted_df = final_filtered_df.sort_values(
                 by='대상학년',
                 key=lambda s: s.str.extract(r'(\d+)')[0].astype(float).fillna(99)
@@ -206,13 +202,23 @@ if master_df is not None:
 
         st.write("---")
 
-        course_options_gen = final_filtered_gen_df.apply(lambda x: f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}", axis=1).tolist()
+        # =======================================================================
+        # 여기가 수정된 교양 과목 정렬 로직
+        # =======================================================================
+        # 1. 수업방식(비대면 우선), 2. 과목명(가나다순)으로 정렬
+        # '비대면'이 '대면'보다 사전적으로 뒤에 오므로, 수업방식은 내림차순(ascending=False) 정렬
+        sorted_gen_df = final_filtered_gen_df.sort_values(
+            by=['수업방법', '교과목명'], ascending=[False, True]
+        )
+        
+        course_options_gen = sorted_gen_df.apply(lambda x: f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}", axis=1).tolist()
+        
         if not course_options_gen:
             st.warning("해당 조건에 현재 추가 가능한 교양 과목이 없습니다.")
         else:
             selected_course_str_gen = st.selectbox("추가할 교양 과목 선택", course_options_gen, key="general_select", label_visibility="collapsed")
             if st.button("교양 추가", key="add_general"):
-                selected_row = final_filtered_gen_df[final_filtered_gen_df.apply(lambda x: f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}", axis=1) == selected_course_str_gen].iloc[0]
+                selected_row = sorted_gen_df[sorted_gen_df.apply(lambda x: f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}", axis=1) == selected_course_str_gen].iloc[0]
                 code, no = selected_row['교과목코드'], selected_row['분반']
                 st.session_state.my_courses.append((code, no))
                 if selected_row['교과목명'] not in st.session_state.color_map:
