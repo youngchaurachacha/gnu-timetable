@@ -10,7 +10,10 @@ st.set_page_config(page_title="GNU 시간표 도우미", layout="wide")
 st.title("👨‍💻 경상국립대학교 2025학년도 2학기 시간표 도우미")
 st.markdown("""
 ⚠️ **주의사항:** 해당 시간표 정보는 [학사공지](https://www.gnu.ac.kr/main/na/ntt/selectNttInfo.do?mi=1127&bbsId=1029&nttSn=2547228)에서 최초 1회 공지된 pdf 파일 기준으로, 실제 수강신청과 다를 수 있습니다. 변경 사항은 [my.gnu.ac.kr](https://my.gnu.ac.kr)에서 수시 확인 가능  
-            **※ 수업시간표는 학사 운영상 변경 및 수정이 될 수 있으니, 수강신청 전 반드시 통합 서비스에서 시간표 확인 요망**
+**※ 수업시간표는 학사 운영상 변경 및 수정이 될 수 있으니, 수강신청 전 반드시 통합 서비스에서 시간표 확인 요망**
+""")
+st.markdown("""
+📂 **[2025학년도 2학기 시간표 엑셀 파일 다운로드](https://github.com/youngchaurachacha/gnu-timetable/raw/refs/heads/main/%EA%B2%BD%EC%83%81%EA%B5%AD%EB%A6%BD%EB%8C%80%ED%95%99%EA%B5%90%202025%ED%95%99%EB%85%84%EB%8F%84%202%ED%95%99%EA%B8%B0%20%EC%8B%9C%EA%B0%84%ED%91%9C.xlsx)**
 """)
 st.info("💡 **안내사항:** 과목을 선택하면 ① '교과목코드가 동일한 경우', ② '중복되는 시간의 과목은 제외'한 나머지 과목들을 드롭다운 메뉴에 표시합니다.")
 
