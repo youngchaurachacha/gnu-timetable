@@ -139,11 +139,22 @@ if master_df is not None:
         if not selected_depts:
             st.info("먼저 전공 학부(과)를 선택해주세요.")
         else:
-            sorted_df = final_filtered_df.sort_values(
-                by='대상학년',
-                key=lambda s: s.str.extract(r'(\d+)')[0].astype(float).fillna(99)
-            )
-            
+            # =======================================================================
+            # 여기가 수정된 전공 과목 정렬 로직
+            # =======================================================================
+            if not final_filtered_df.empty:
+                # 정렬을 위한 임시 학년 숫자 컬럼 생성
+                temp_df = final_filtered_df.copy()
+                temp_df['grade_num'] = temp_df['대상학년'].str.extract(r'(\d+)').astype(float).fillna(99)
+                
+                # 1.학년, 2.이수구분(전필 우선), 3.과목명 순으로 정렬
+                sorted_df = temp_df.sort_values(
+                    by=['grade_num', '이수구분', '교과목명'],
+                    ascending=[True, False, True]
+                )
+            else:
+                sorted_df = final_filtered_df
+
             course_options = sorted_df.apply(lambda x: f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반) / {format_time_for_display(x['parsed_time'])}", axis=1).tolist()
             
             if not course_options:
@@ -201,12 +212,7 @@ if master_df is not None:
             final_filtered_gen_df = df_after_area[df_after_area['수업방법'] == selected_method]
 
         st.write("---")
-
-        # =======================================================================
-        # 여기가 수정된 교양 과목 정렬 로직
-        # =======================================================================
-        # 1. 수업방식(비대면 우선), 2. 과목명(가나다순)으로 정렬
-        # '비대면'이 '대면'보다 사전적으로 뒤에 오므로, 수업방식은 내림차순(ascending=False) 정렬
+        
         sorted_gen_df = final_filtered_gen_df.sort_values(
             by=['수업방법', '교과목명'], ascending=[False, True]
         )
@@ -256,8 +262,9 @@ if master_df is not None:
                 for time_info in course['parsed_time']:
                     if time_info['day'] not in days_to_display:
                         continue
-                        
+                    
                     content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>{time_info['room']}"
+                    
                     periods = sorted(time_info['periods'])
                     if not periods: continue
                     
