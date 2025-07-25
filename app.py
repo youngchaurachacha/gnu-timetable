@@ -21,12 +21,11 @@ def load_and_process_data(file_path, major_sheet, general_sheet):
         st.error(f"엑셀 파일을 읽는 중 오류 발생: {e}")
         return None
 
-    # '비고' 컬럼 추가 (엑셀 파일에 '비고' 열이 있어야 함)
-    general_cols = ['교과목명', '교수명', '학점', '이수구분', '영역구분', '학과', '수강반번호', '강의시간/강의실', '캠퍼스구분', '교과목코드', '수업방법', '비고']
-    major_cols = ['교과목명', '교수명', '학점', '이수구분', '학부(과)', '대상학년', '분반', '강의시간/강의실', '캠퍼스구분', '교과목코드', '수업방법', '비고']
+    # '비고', '원격강의구분' 컬럼 추가 (엑셀 파일에 해당 열이 있어야 함)
+    general_cols = ['교과목명', '교수명', '학점', '이수구분', '영역구분', '학과', '수강반번호', '강의시간/강의실', '캠퍼스구분', '교과목코드', '수업방법', '비고', '원격강의구분']
+    major_cols = ['교과목명', '교수명', '학점', '이수구분', '학부(과)', '대상학년', '분반', '강의시간/강의실', '캠퍼스구분', '교과목코드', '수업방법', '비고', '원격강의구분']
 
     # 엑셀 파일에 해당 컬럼이 실제로 있는지 확인하고, 없으면 빈 값으로 처리
-    # 이렇게 해야 '비고' 컬럼이 없어도 에러 없이 작동한다.
     for col in general_cols:
         if col not in df_general.columns:
             df_general[col] = ''
@@ -44,8 +43,9 @@ def load_and_process_data(file_path, major_sheet, general_sheet):
 
     df_combined = pd.concat([df_general_p, df_major_p], ignore_index=True).dropna(subset=['교과목코드', '분반'])
     df_combined[['대상학년', '영역구분']] = df_combined[['대상학년', '영역구분']].fillna('')
-    # '비고' 컬럼도 NaN을 빈 문자열로 채워줘서 추후 출력 시 'nan'이 뜨는 것을 방지한다.
+    # '비고', '원격강의구분' 컬럼도 NaN을 빈 문자열로 채워줘서 추후 출력 시 'nan'이 뜨는 것을 방지한다.
     df_combined['비고'] = df_combined['비고'].fillna('')  
+    df_combined['원격강의구분'] = df_combined['원격강의구분'].fillna('')
     df_combined['교과목코드'] = df_combined['교과목코드'].astype(int)
     df_combined['분반'] = df_combined['분반'].astype(int)
     
@@ -120,15 +120,23 @@ def generate_random_color():
 
 def format_major_display_string(x):
     """전공 과목 선택 목록에 표시될 문자열을 포맷하는 함수"""
-    # 전공 과목도 교양처럼 교수명, 분반, 학점 표시
-    base_str = f"[{x['대상학년']}/{x['이수구분']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+    # 수업 방법 및 캠퍼스 정보 포맷팅
+    method_campus_info = ""
+    if pd.notna(x['수업방법']) and x['수업방법'].strip() != '':
+        if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']) and x['캠퍼스구분'].strip() != '':
+            method_campus_info = f"/{x['수업방법']}({x['캠퍼스구분']})"
+        else:
+            method_campus_info = f"/{x['수업방법']}"
     
-    # 수업 방법이 '대면'/'혼합'을 포함하고, 캠퍼스구분 값이 실제로 존재할 경우에만 캠퍼스 정보 추가
-    if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']) and x['캠퍼스구분'].strip() != '':
-        base_str = f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}({x['캠퍼스구분']})] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
-    else:
-        # 비대면 등 캠퍼스 정보가 없는 경우
-        base_str = f"[{x['대상학년']}/{x['이수구분']}/{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+    # 원격 강의 구분 정보 추가 (비대면 또는 혼합 수업일 경우)
+    remote_info = ""
+    if ('비대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['원격강의구분']) and x['원격강의구분'].strip() != '':
+        remote_info = f"({x['원격강의구분']})"
+
+    base_str = (
+        f"[{x['대상학년']}/{x['이수구분']}{method_campus_info}{remote_info}] "
+        f"{x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+    )
         
     # 비고 내용이 있다면 추가
     if pd.notna(x['비고']) and x['비고'].strip() != '':
@@ -137,15 +145,25 @@ def format_major_display_string(x):
 
 def format_general_display_string(x):
     """교양 과목 선택 목록에 표시될 문자열을 포맷하는 함수"""
-    # 균형교양/핵심교양의 경우 영역 구분도 선택란에 뜨도록 수정
-    # 캠퍼스는 수업(캠퍼스)로 되게끔 수정
-    campus_info = ""
-    if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']) and x['캠퍼스구분'].strip() != '':
-        campus_info = f"({x['캠퍼스구분']})"
+    # 수업 방법 및 캠퍼스 정보 포맷팅
+    method_campus_info = ""
+    if pd.notna(x['수업방법']) and x['수업방법'].strip() != '':
+        if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']) and x['캠퍼스구분'].strip() != '':
+            method_campus_info = f"/{x['수업방법']}({x['캠퍼스구분']})"
+        else:
+            method_campus_info = f"/{x['수업방법']}"
     
+    # 원격 강의 구분 정보 추가 (비대면 또는 혼합 수업일 경우)
+    remote_info = ""
+    if ('비대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['원격강의구분']) and x['원격강의구분'].strip() != '':
+        remote_info = f"({x['원격강의구분']})"
+
     area_info = f"/{x['영역구분']}" if x['영역구분'] and x['영역구분'].strip() != '' else ""
 
-    base_str = f"[{x['이수구분']}{area_info}/{x['수업방법']}{campus_info}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+    base_str = (
+        f"[{x['이수구분']}{area_info}{method_campus_info}{remote_info}] "
+        f"{x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+    )
 
     # 비고 내용이 있다면 추가
     if pd.notna(x['비고']) and x['비고'].strip() != '':
@@ -445,24 +463,27 @@ if master_df is not None:
             for course in untimed_courses:  
                 # 시간 미지정 과목에도 비고 정보 추가
                 remark_display = f" / 비고: {course['비고']}" if pd.notna(course['비고']) and course['비고'].strip() != '' else ''
-                st.write(f"- [{course['수업방법']}] {course['교과목명']} ({course['교수명']}, {course['학점']}학점){remark_display}")
+                # 원격강의구분 정보 추가
+                remote_info_display = f" ({course['원격강의구분']})" if ('비대면' in course['수업방법'] or '혼합' in course['수업방법']) and pd.notna(course['원격강의구분']) and course['원격강의구분'].strip() != '' else ''
+                st.write(f"- [{course['수업방법']}{remote_info_display}] {course['교과목명']} ({course['교수명']}, {course['학점']}학점){remark_display}")
         st.write("---")
         st.write("**[선택한 과목 목록]**")
         for code, no in st.session_state.my_courses:
             course = master_df[(master_df['교과목코드'] == code) & (master_df['분반'] == no)].iloc[0]
             col1, col2 = st.columns([0.8, 0.2])
             with col1:
-                # 전공/교양에 따라 기본 정보 문자열 생성
-                # 수정된 부분: 아래 출력 형식은 이미 위에서 format_major_display_string, format_general_display_string으로 처리되므로,
-                # 이 부분에서는 간단하게 과목명, 교수명, 학점, 분반, 수업방식(캠퍼스), 비고를 포함하도록 재구성
-                
                 # 수업방법 및 캠퍼스 정보 포맷팅
                 method_campus_info = ""
                 if pd.notna(course['수업방법']) and course['수업방법'].strip() != '':
                     if ('대면' in course['수업방법'] or '혼합' in course['수업방법']) and pd.notna(course['캠퍼스구분']) and course['캠퍼스구분'].strip() != '':
-                        method_campus_info = f"[{course['수업방법']}({course['캠퍼스구분']})]"
+                        method_campus_info = f"/{course['수업방법']}({course['캠퍼스구분']})"
                     else:
-                        method_campus_info = f"[{course['수업방법']}]"
+                        method_campus_info = f"/{course['수업방법']}"
+                
+                # 원격 강의 구분 정보 추가 (비대면 또는 혼합 수업일 경우)
+                remote_info = ""
+                if ('비대면' in course['수업방법'] or '혼합' in course['수업방법']) and pd.notna(course['원격강의구분']) and course['원격강의구분'].strip() != '':
+                    remote_info = f"({course['원격강의구분']})"
 
                 # 영역구분 정보 (교양 과목일 경우에만)
                 area_info = ""
@@ -472,7 +493,6 @@ if master_df is not None:
                 # 이수구분 정보 (전공 과목의 경우 학년 정보 포함)
                 course_type_info = ""
                 if course['type'] == '전공':
-                    # 여기를 수정하여 학년 정보를 포함
                     course_type_info = f"[{course['대상학년']}/{course['이수구분']}]"
                 else: # 교양 과목
                     course_type_info = f"[{course['이수구분']}{area_info}]"
@@ -486,7 +506,7 @@ if master_df is not None:
                 display_str = (
                     f"- {course_type_info} {course['교과목명']} "
                     f"({course['교수명']}, {course['분반']}반, {course['학점']}학점) "
-                    f"{method_campus_info}{remark_display_str}"
+                    f"{method_campus_info}{remote_info}{remark_display_str}"
                 )
                 
                 # 완성된 문자열을 출력
