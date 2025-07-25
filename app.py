@@ -284,7 +284,12 @@ if master_df is not None:
         day_col_width = (100 - 5 - 10) / len(days_to_display)
         html = f"""
         <style>
-        .timetable {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
+        .timetable {{ 
+            width: 100%; 
+            border-collapse: collapse; 
+            table-layout: fixed; 
+            border-bottom: 1px solid #e0e0e0; 
+        }}
         .timetable th, .timetable td {{ 
             border: 1px solid #e0e0e0; 
             text-align: center; 
