@@ -290,12 +290,12 @@ if master_df is not None:
             border: 1px solid #e0e0e0; 
             text-align: center; 
             vertical-align: middle; 
-            padding: 2px; /* 내부 여백 축소 */
-            height: 50px; /* 셀 높이 축소 */
-            font-size: 0.75em; /* 폰트 크기 축소 */
+            padding: 2px;
+            height: 50px;
+            font-size: 0.75em;
             overflow: hidden;
             text-overflow: ellipsis;
-            word-break: keep-all; /* 단어 단위 줄바꿈 개선 */
+            word-break: keep-all;
         }}
         .timetable th {{ background-color: #f0f2f6; font-weight: bold; }}
         </style>
@@ -308,13 +308,14 @@ if master_df is not None:
             html += f'<th width="{day_col_width}%">{d}</th>'
         html += '</tr>'
 
-        time_map = {{p: f"{{p+8:02d}}:00" for p in range(1, 13)}}
+        # --- 여기가 수정된 부분 ---
+        time_map = {p: f"{p+8:02d}:00" for p in range(1, 13)}
         for p in range(1, 13):
             # 내용이 있는 행만 표시하여 빈 공간 최소화
-            has_content = any(timetable_data.get((p, d), {{}}).get("content") for d in days_to_display)
+            has_content = any(timetable_data.get((p, d), {}).get("content") for d in days_to_display)
             if not has_content: continue
 
-            is_row_visible = any(timetable_data.get((p, d), {{}}).get("is_visible", False) for d in days_to_display)
+            is_row_visible = any(timetable_data.get((p, d), {}).get("is_visible", False) for d in days_to_display)
             if not is_row_visible: continue
             
             html += '<tr>'
@@ -322,14 +323,14 @@ if master_df is not None:
             for d in days_to_display:
                 cell = timetable_data.get((p, d))
                 if cell and cell["is_visible"]:
-                    html += f'<td rowspan="{{cell["span"]}}" style="background-color:{{cell["color"]}};">{{cell["content"]}}</td>'
+                    html += f'<td rowspan="{cell["span"]}" style="background-color:{cell["color"]};">{cell["content"]}</td>'
             html += '</tr>'
         
         html += "</table>"
         
         total_credits = my_courses_df['학점'].sum()
-        st.metric("총 신청 학점", f"{{total_credits}} 학점")
-        # 전체 컴포넌트 높이 축소 및 스크롤바 제거 (내용이 넘칠 경우에만 생김)
+        st.metric("총 신청 학점", f"{total_credits} 학점")
+        # 전체 컴포넌트 높이 축소
         st.components.v1.html(html, height=700, scrolling=True)
 
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
