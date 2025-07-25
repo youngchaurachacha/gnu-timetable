@@ -86,7 +86,6 @@ if master_df is not None:
     
     tab_major, tab_general = st.tabs(["🎓 전공 과목 선택", "📚 교양 과목 선택"])
     
-    # --- 여기가 수정된 전공 탭 로직 ---
     with tab_major:
         majors_df = available_df[available_df['type'] == '전공']
         
@@ -98,16 +97,21 @@ if master_df is not None:
             selected_depts = st.multiselect("전공 학부(과)", department_options)
 
         # --- 2. 데이터 순차적 필터링 ---
-        # 학부(과) 선택에 따라 필터링
         if selected_depts:
             filtered_df = majors_df[majors_df['학부(과)'].isin(selected_depts)]
         else:
             filtered_df = majors_df
         
-        # 학년 필터 (선택된 학부(과) 내에서만 옵션 표시)
+        # --- 여기가 수정된 학년 필터 로직 ---
         with col2:
-            grade_options = sorted(filtered_df['대상학년'].dropna().unique(), key=lambda x: int(re.search(r'\d+', str(x)).group()) if re.search(r'\d+', str(x)) else 0)
-            selected_grade = st.selectbox("학년", ["전체"] + grade_options, key="grade_select")
+            # 1. 데이터에서 학년 목록을 가져와 숫자로 정렬한다.
+            grade_options = sorted(
+                filtered_df['대상학년'].dropna().unique(), 
+                key=lambda x: int(re.search(r'\d+', str(x)).group()) if re.search(r'\d+', str(x)) else 0
+            )
+            # 2. 정렬된 목록의 맨 앞에 '전체'를 추가한다.
+            final_grade_options = ["전체"] + grade_options
+            selected_grade = st.selectbox("학년", final_grade_options, key="grade_select")
         
         if selected_grade != "전체":
             filtered_df = filtered_df[filtered_df['대상학년'] == selected_grade]
