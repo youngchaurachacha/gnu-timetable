@@ -7,7 +7,7 @@ import random
 # --- 기본 설정 및 데이터 로딩 ---
 
 st.set_page_config(page_title="GNU 시간표 도우미", layout="wide")
-st.title("👨‍💻 경상국립대학교 시간표 도우미")
+st.title("👨‍💻 경상국립대학교 2025학년도 2학기 시간표 도우미")
 
 @st.cache_data
 def load_and_process_data(file_path, major_sheet, general_sheet):
@@ -58,13 +58,11 @@ def get_available_courses(df, selected_codes):
     return df[available_mask]
 
 def format_time_for_display(parsed_time):
-    # (이전과 동일)
     if not parsed_time: return "시간미지정"
     time_str_parts = [f"{t['day']}{','.join(map(str, t['periods']))}" for t in parsed_time]
     return " ".join(time_str_parts)
 
 def generate_random_color():
-    # (이전과 동일)
     return f"hsl({random.randint(0, 360)}, 80%, 90%)"
 
 # --- 웹앱 UI 및 로직 ---
@@ -86,14 +84,12 @@ if master_df is not None:
     
     tab_major, tab_general = st.tabs(["🎓 전공 과목 선택", "📚 교양 과목 선택"])
     
-    # --- 여기가 수정된 전공 탭 로직 ---
     with tab_major:
         majors_df = available_df[available_df['type'] == '전공']
         
         # --- 1. 필터 위젯 배치 ---
         col1, col2, col3 = st.columns([0.5, 0.25, 0.25])
         
-        # --- 2. 데이터 순차적 필터링 및 위젯 옵션 생성 ---
         with col1:
             department_options = sorted(majors_df['학부(과)'].dropna().unique().tolist())
             selected_depts = st.multiselect("전공 학부(과)", department_options)
@@ -106,13 +102,13 @@ if master_df is not None:
 
         # --- 여기가 수정된 학년 필터 로직 ---
         with col2:
-            # 1. 데이터에서 학년 목록을 가져옴
+            # 1. 데이터에서 비어있지 않은 고유 학년 목록을 가져옴
             unique_grades = filtered_df_1['대상학년'].dropna().unique()
             
             # 2. 문자열에서 숫자를 추출하여, 그 숫자를 기준으로 목록을 정렬
             grade_options = sorted(
                 unique_grades, 
-                key=lambda x: int(re.search(r'\d+', str(x)).group()) if re.search(r'\d+', str(x)) else 0
+                key=lambda x: int(re.search(r'\d+', str(x)).group()) if re.search(r'\d+', str(x)) else 99
             )
             
             # 3. 정렬된 목록의 맨 앞에 '전체'를 추가
@@ -217,7 +213,7 @@ if master_df is not None:
             if course['parsed_time']:
                 color = st.session_state.color_map.get(course['교과목명'], "white")
                 for time_info in course['parsed_time']:
-                    content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>({time_info['room']})"
+                    content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>{time_info['room']}"
                     periods = sorted(time_info['periods'])
                     if not periods: continue
                     start_period, block_len = periods[0], 1
