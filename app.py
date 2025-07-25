@@ -284,11 +284,22 @@ if master_df is not None:
                     df_after_sub_cat = df_after_cat[df_after_cat['교과목명'] != '꿈·미래개척']
         
         # 캠퍼스 선택란을 위한 컬럼 분리
-        area_col, method_col, campus_col = (col2, col3, col4) if selected_cat != '일반선택' else (col3, col4, None) # 일반선택일 경우 캠퍼스컬럼 위치 조정
+        # 일반선택일 때는 area_col이 할당되지 않도록 변경
+        if selected_cat != '일반선택':
+            area_col, method_col, campus_col = col2, col3, col4
+        else:
+            # 일반선택일 경우 area_col은 사용하지 않고, method_col과 campus_col만 할당
+            # 따라서 col2는 빈 공간으로 남게 되고, method_col은 col3, campus_col은 col4가 됨
+            area_col, method_col, campus_col = None, col3, col4 
         
-        with area_col:
-            area_options = sorted(df_after_sub_cat['영역구분'].dropna().unique().tolist())
-            selected_area = st.selectbox("영역구분", ["전체"] + area_options, key="area_select")
+        # area_col이 None이 아닐 때만 영역구분란을 렌더링
+        if area_col: # 이 조건문 추가
+            with area_col:
+                area_options = sorted(df_after_sub_cat['영역구분'].dropna().unique().tolist())
+                selected_area = st.selectbox("영역구분", ["전체"] + area_options, key="area_select")
+        else: # area_col이 None일 경우, 즉 '일반선택'일 경우
+            selected_area = "전체" # 영역구분을 "전체"로 기본 설정 (필터링에 영향 없게)
+
 
         df_after_area = df_after_sub_cat
         if selected_area != "전체":
