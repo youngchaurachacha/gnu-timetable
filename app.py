@@ -7,7 +7,7 @@ import random
 # --- 기본 설정 및 데이터 로딩 ---
 
 st.set_page_config(page_title="GNU 시간표 도우미", layout="wide")
-st.title("👨‍💻 경상국립대학교 시간표 도우미")
+st.title("👨‍💻 경상국립대학교 2025학년도 2학기 시간표 도우미")
 
 @st.cache_data
 def load_and_process_data(file_path, major_sheet, general_sheet):
