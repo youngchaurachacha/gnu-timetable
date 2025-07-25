@@ -383,9 +383,25 @@ if master_df is not None:
             course = master_df[(master_df['교과목코드'] == code) & (master_df['분반'] == no)].iloc[0]
             col1, col2 = st.columns([0.8, 0.2])
             with col1:
+                # 전공/교양에 따라 기본 정보 문자열 생성
                 grade_info = f"[{course['대상학년']}/{course['이수구분']}] " if course['type'] == '전공' else f"[{course['이수구분']}] "
-                st.write(f"- {grade_info}{course['교과목명']} ({course['교수명']}, {course['학점']}학점) **[{course['수업방법']}]**")
-                st.caption(f"&nbsp;&nbsp;&nbsp;&nbsp; (교과목코드: {code}, 분반: {no})")
+                
+                # 수업방법 및 캠퍼스 정보 포맷팅을 위한 변수
+                method_display_str = ""
+                # '대면' 또는 '혼합' 수업이고, 캠퍼스구분 값이 실제로 존재할 경우
+                if ('대면' in course['수업방법'] or '혼합' in course['수업방법']) and pd.notna(course['캠퍼스구분']):
+                    # '|'를 사용해 캠퍼스 정보를 합쳐서 포맷
+                    method_display_str = f"**[{course['수업방법']}|{course['캠퍼스구분']}]**"
+                else:
+                    # 그 외의 경우(비대면 등)는 기존처럼 수업방법만 표시
+                    method_display_str = f"**[{course['수업방법']}]**"
+
+                # 최종으로 화면에 표시될 문자열 생성
+                display_str = f"- {grade_info}{course['교과목명']} ({course['교수명']}, {course['학점']}학점) {method_display_str}"
+                
+                # 완성된 문자열을 출력
+                st.write(display_str)
+                st.caption(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (교과목코드: {code}, 분반: {no})")
             with col2:
                 if st.button("제거", key=f"del-{code}-{no}"):
                     st.session_state.my_courses.remove((code, no))
