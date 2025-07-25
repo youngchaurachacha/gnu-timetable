@@ -117,11 +117,24 @@ if master_df is not None:
             selected_cat = st.selectbox("이수구분", categories, key="cat_select")
         
         df_by_cat = general_df[general_df['이수구분'] == selected_cat]
+        
+        # '일반선택'일 경우 추가 필터 제공
+        if selected_cat == '일반선택':
+            sub_cat_options = ['전체', '꿈·미래개척', '그 외 일반선택']
+            selected_sub_cat = st.selectbox("일반선택 세부 유형", sub_cat_options, key="sub_cat_select")
+            if selected_sub_cat == '꿈·미래개척':
+                df_by_cat = df_by_cat[df_by_cat['교과목명'] == '꿈·미래개척']
+            elif selected_sub_cat == '그 외 일반선택':
+                df_by_cat = df_by_cat[df_by_cat['교과목명'] != '꿈·미래개척']
+        
         with col2:
             areas = sorted(df_by_cat['영역구분'].dropna().unique().tolist())
-            selected_area = st.selectbox("영역구분", ["전체"] + areas, key="area_select")
+            if areas: # 영역구분 데이터가 있을 때만 필터 표시
+                selected_area = st.selectbox("영역구분", ["전체"] + areas, key="area_select")
+                df_by_area = df_by_cat if selected_area == "전체" else df_by_cat[df_by_cat['영역구분'] == selected_area]
+            else:
+                df_by_area = df_by_cat
 
-        df_by_area = df_by_cat if selected_area == "전체" else df_by_cat[df_by_cat['영역구분'] == selected_area]
         with col3:
             methods = sorted(df_by_area['수업방법'].dropna().unique().tolist())
             selected_method = st.selectbox("수업방법", ["전체"] + methods, key="method_select")
@@ -133,7 +146,7 @@ if master_df is not None:
         if not course_options_gen:
             st.warning("해당 조건에 현재 추가 가능한 교양 과목이 없습니다.")
         else:
-            selected_course_str_gen = st.selectbox("추가할 교양 과목 선택", course_options_gen, key="general_select")
+            selected_course_str_gen = st.selectbox("추가할 교양 과목 선택", course_options_gen, key="general_select", label_visibility="collapsed")
             if st.button("교양 추가", key="add_general"):
                 selected_row = filtered_gen_df[filtered_gen_df.apply(lambda x: f"[{x['수업방법']}] {x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}", axis=1) == selected_course_str_gen].iloc[0]
                 code, no = selected_row['교과목코드'], selected_row['분반']
@@ -159,7 +172,7 @@ if master_df is not None:
         for _, course in my_courses_df.iterrows():
             if course['parsed_time']:
                 color = st.session_state.color_map.get(course['교과목명'], "white")
-                content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>{course['강의시간/강의실']}"
+                content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>({course['강의시간/강의실']})"
                 for time_info in course['parsed_time']:
                     periods = sorted(time_info['periods'])
                     if not periods: continue
