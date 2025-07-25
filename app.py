@@ -53,18 +53,40 @@ def load_and_process_data(file_path, major_sheet, general_sheet):
 
 def get_available_courses(df, selected_codes):
     """
-    전체 과목 목록과 현재 선택한 과목 코드를 받아, 시간이 겹치지 않는 과목 목록을 반환한다.
+    전체 과목 목록과 현재 선택한 과목 코드를 받아,
+    1. 이미 선택한 과목과 교과목코드가 같은 모든 과목(다른 분반 포함)
+    2. 시간이 겹치는 과목
+    을 제외하고 수강 가능한 과목 목록을 반환한다.
     """
+    # 선택된 과목이 없으면 원본 데이터프레임을 그대로 반환.
+    if not selected_codes:
+        return df
+
+    # 현재 내가 선택한 과목들의 시간 정보와 '교과목코드' 목록을 가져옴.
     my_timed_schedule = [t for code, no in selected_codes for t in df.loc[(df['교과목코드'] == code) & (df['분반'] == no), 'parsed_time'].iloc[0]]
-    available_mask = df.index.to_series().astype(bool)
-    selected_indices = df[df.set_index(['교과목코드', '분반']).index.isin(selected_codes)].index
-    available_mask.loc[selected_indices] = False
+    my_course_codes = {code for code, no in selected_codes}
+
+    # 1. 이미 선택한 과목과 '교과목코드'가 같은 과목들을 먼저 제외시킴.
+    #    df['교과목코드'].isin(my_course_codes)는 내가 선택한 코드와 같은 과목들을 True로 표시.
+    #    '~' 연산자로 이를 뒤집어, 해당 과목들을 제외한 나머지 과목들만 True로 남김.
+    available_mask = ~df['교과목코드'].isin(my_course_codes)
+
+    # 2. 남은 과목들 중에서 시간이 겹치는 과목을 추가로 제외시킴.
     for t in my_timed_schedule:
         day, periods = t['day'], set(t['periods'])
-        possible_conflicts = df[available_mask & (df['parsed_time'].apply(lambda pts: any(p['day'] == day for p in pts)))].index
-        for index in possible_conflicts:
-            if any(p['day'] == day and set(p['periods']) & periods for p in df.loc[index, 'parsed_time']):
-                available_mask.loc[index] = False
+        
+        # 현재까지 선택 가능한 과목들(available_mask == True) 중에서,
+        # 검사하려는 요일(day)에 수업이 있는 과목들의 인덱스를 찾음. (효율성)
+        possible_conflicts_indices = df[available_mask & df['parsed_time'].apply(lambda pts: any(p['day'] == day for p in pts))].index
+
+        # 해당 과목들을 하나씩 돌면서 실제로 시간이 겹치는지 최종 확인.
+        for index in possible_conflicts_indices:
+            # 과목의 parsed_time 리스트를 순회하며, 요일이 같고 교시가 하나라도 겹치는지 확인.
+            # not set(p['periods']).isdisjoint(periods)는 두 집합에 공통 원소가 있는지 확인하는 효율적인 방법.
+            if any(p['day'] == day and not set(p['periods']).isdisjoint(periods) for p in df.loc[index, 'parsed_time']):
+                available_mask.loc[index] = False # 겹치면 선택 불가능(False) 처리.
+    
+    # 최종적으로 필터링된 마스크를 적용하여 수강 가능한 과목 목록을 반환.
     return df[available_mask]
 
 def format_time_for_display(parsed_time):
