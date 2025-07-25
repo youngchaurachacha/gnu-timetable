@@ -235,7 +235,7 @@ if master_df is not None:
     st.divider()
     st.subheader("2. 나의 시간표")
 
-    if not st.session_state.my_courses:
+if not st.session_state.my_courses:
         st.info("과목을 추가하면 시간표가 여기에 표시됩니다.")
     else:
         my_courses_df = master_df[master_df.set_index(['교과목코드', '분반']).index.isin(st.session_state.my_courses)]
@@ -252,10 +252,12 @@ if master_df is not None:
             days_to_display.append('일')
 
         timetable_data = {}
+        # 먼저 모든 칸을 기본값으로 초기화
         for p in range(1, 13):
             for d in days_to_display:
                 timetable_data[(p, d)] = {"content": "", "color": "white", "span": 1, "is_visible": True}
 
+        # 선택된 과목 정보로 데이터 채우기
         for _, course in my_courses_df.iterrows():
             if course['parsed_time']:
                 color = st.session_state.color_map.get(course['교과목명'], "white")
@@ -281,7 +283,7 @@ if master_df is not None:
                     for j in range(1, block_len):
                         if start_period + j <= 12: timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
 
-        # --- 스타일 및 HTML 생성 (사이즈 축소) ---
+        # --- 스타일 및 HTML 생성 (사이즈 축소, 모든 행 표시) ---
         day_col_width = (100 - 5 - 10) / len(days_to_display)
         html = f"""
         <style>
@@ -308,20 +310,25 @@ if master_df is not None:
             html += f'<th width="{day_col_width}%">{d}</th>'
         html += '</tr>'
 
-        # --- 여기가 수정된 부분 ---
         time_map = {p: f"{p+8:02d}:00" for p in range(1, 13)}
-        for p in range(1, 13):
-            # 내용이 있는 행만 표시하여 빈 공간 최소화
-            has_content = any(timetable_data.get((p, d), {}).get("content") for d in days_to_display)
-            if not has_content: continue
+        
+        # 마지막 교시가 몇 교시인지 계산
+        last_period = 0
+        if not my_courses_df.empty:
+            for _, course in my_courses_df.iterrows():
+                for time_info in course['parsed_time']:
+                    if time_info['periods']:
+                        last_period = max(last_period, max(time_info['periods']))
+        # 기본적으로 최소 9교시까지는 표시
+        display_until = max(9, last_period)
 
-            is_row_visible = any(timetable_data.get((p, d), {}).get("is_visible", False) for d in days_to_display)
-            if not is_row_visible: continue
-            
+        # 1교시부터 마지막 교시까지 모든 행을 그림
+        for p in range(1, display_until + 1):
             html += '<tr>'
-            html += f'<td>{p}</td><td>{time_map[p]}</td>'
+            html += f'<td>{p}</td><td>{time_map.get(p, "")}</td>'
             for d in days_to_display:
                 cell = timetable_data.get((p, d))
+                # rowspan으로 합쳐진 셀이 아니면 td를 그림
                 if cell and cell["is_visible"]:
                     html += f'<td rowspan="{cell["span"]}" style="background-color:{cell["color"]};">{cell["content"]}</td>'
             html += '</tr>'
@@ -330,8 +337,8 @@ if master_df is not None:
         
         total_credits = my_courses_df['학점'].sum()
         st.metric("총 신청 학점", f"{total_credits} 학점")
-        # 전체 컴포넌트 높이 축소
-        st.components.v1.html(html, height=700, scrolling=True)
+        # 컴포넌트 높이를 늘려 스크롤 없이 보이도록 조정
+        st.components.v1.html(html, height=(display_until * 55) + 40, scrolling=False)
 
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
         if untimed_courses:
