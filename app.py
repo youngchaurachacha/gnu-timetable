@@ -338,7 +338,7 @@ if master_df is not None:
             col1, col2 = st.columns([0.8, 0.2])
             with col1:
                 grade_info = f"[{course['대상학년']}/{course['이수구분']}] " if course['type'] == '전공' else f"[{course['이수구분']}] "
-                st.write(f"- {grade_info}{course['교과목명']} ({course['교수명']}) **[{course['수업방법']}]**")
+                st.write(f"- {grade_info}{course['교과목명']} ({course['교수명']}, {course['학점']}학점) **[{course['수업방법']}]**")
                 st.caption(f"&nbsp;&nbsp;&nbsp;&nbsp; (교과목코드: {code}, 분반: {no})")
             with col2:
                 if st.button("제거", key=f"del-{code}-{no}"):
