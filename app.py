@@ -305,17 +305,21 @@ if master_df is not None:
         if '토' in all_class_days: days_to_display.append('토')
         if '일' in all_class_days: days_to_display.append('일')
 
-        # 2. 최대 교시 동적으로 계산
-        max_period = 9   # 기본값 9교시
+        # 2. 최종 표시될 최대 교시 동적으로 계산
+        default_max_period = 9 # 기본적으로 9교시까지 표시
+        
+        # 현재 선택된 과목들 중 가장 늦은 교시를 찾는다.
         all_periods = [p for _, course in my_courses_df.iterrows() for time_info in course['parsed_time'] for p in time_info['periods']]
-        if all_periods:
-            # 실제 데이터의 최대 교시가 9보다 크면 그 값을 사용
-            if max(all_periods) > 9:
-                max_period = max(all_periods)
+        
+        # 실제 데이터에 있는 최대 교시 (과목이 없다면 0)
+        actual_max_period_in_data = max(all_periods) if all_periods else 0 
+        
+        # 최종적으로 시간표에 표시될 최대 교시는 기본값(9)과 실제 데이터의 최대 교시 중 더 큰 값으로 설정한다.
+        final_display_max_period = max(default_max_period, actual_max_period_in_data)
 
-        # 3. 동적으로 계산된 최대 교시에 맞춰 시간표 격자 생성
+        # 3. 최종 표시될 최대 교시에 맞춰 시간표 격자 생성
         timetable_data = {}
-        for p in range(1, max_period + 1):
+        for p in range(1, final_display_max_period + 1): # <-- final_display_max_period 사용
             for d in days_to_display:
                 timetable_data[(p, d)] = {"content": "", "color": "white", "span": 1, "is_visible": True}
 
@@ -382,11 +386,10 @@ if master_df is not None:
             html += f'<th width="{day_col_width}%">{d}</th>'
         html += '</tr>'
 
-        time_map = {p: f"{p+8:02d}:00" for p in range(1, 13)}
+        time_map = {p: f"{p+8:02d}:00" for p in range(1, 13)} # 13교시까지 데이터가 있을 수 있으니 time_map은 유지
         
-        # --- 여기가 롤백된 부분 ---
-        # 1교시부터 12교시까지 항상 표시하도록 변경
-        for p in range(1, 13):
+        # 최종 표시될 최대 교시까지 반복하여 HTML 테이블 행 생성
+        for p in range(1, final_display_max_period + 1): # <-- 이 부분을 final_display_max_period 사용
             html += '<tr>'
             html += f'<td>{p}</td><td>{time_map.get(p, "")}</td>'
             for d in days_to_display:
@@ -400,8 +403,8 @@ if master_df is not None:
         total_credits = my_courses_df['학점'].sum()
         st.metric("총 신청 학점", f"{total_credits} 학점")
         
-        # 12교시 기준 고정 높이, 넘칠 경우 스크롤 표시
-        table_height = (12 * 55) + 60 
+        # 최종 표시될 최대 교시에 맞춰 테이블 높이 조정
+        table_height = (final_display_max_period * 55) + 60 # <-- final_display_max_period 사용
         st.components.v1.html(html, height=table_height, scrolling=True)
 
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
