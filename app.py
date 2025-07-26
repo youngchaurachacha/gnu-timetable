@@ -300,7 +300,7 @@ if master_df is not None:
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            cat_options = sorted(general_df['이수구분'].dropna().unique().tolist())
+            cat_options = sorted(master_df[master_df['type'] == '교양']['이수구분'].dropna().unique().tolist())
             selected_cat = st.selectbox("이수구분", ["전체"] + cat_options, key="cat_select")
 
         df_after_cat = general_df
@@ -317,23 +317,18 @@ if master_df is not None:
                 elif selected_sub_cat == '그 외 일반선택':
                     df_after_sub_cat = df_after_cat[df_after_cat['교과목명'] != '꿈·미래개척']
         
-        # 캠퍼스 선택란을 위한 컬럼 분리
-        # 일반선택일 때는 area_col이 할당되지 않도록 변경
         if selected_cat != '일반선택':
             area_col, method_col, campus_col = col2, col3, col4
         else:
-            # 일반선택일 경우 area_col은 사용하지 않고, method_col과 campus_col만 할당
-            # 따라서 col2는 빈 공간으로 남게 되고, method_col은 col3, campus_col은 col4가 됨
             area_col, method_col, campus_col = None, col3, col4 
         
-        # area_col이 None이 아닐 때만 영역구분란을 렌더링
-        if area_col: # 이 조건문 추가
+        if area_col:
             with area_col:
-                area_options = sorted(df_after_sub_cat['영역구분'].dropna().unique().tolist())
+                area_options_source = master_df[(master_df['type'] == '교양') & (master_df['이수구분'] == selected_cat)]
+                area_options = sorted(area_options_source['영역구분'].dropna().unique().tolist())
                 selected_area = st.selectbox("영역구분", ["전체"] + area_options, key="area_select")
-        else: # area_col이 None일 경우, 즉 '일반선택'일 경우
-            selected_area = "전체" # 영역구분을 "전체"로 기본 설정 (필터링에 영향 없게)
-
+        else:
+            selected_area = "전체"
 
         df_after_area = df_after_sub_cat
         if selected_area != "전체":
@@ -347,8 +342,7 @@ if master_df is not None:
         if selected_method != "전체":
             df_after_method = df_after_area[df_after_area['수업방법'] == selected_method]
         
-        selected_general_campus = "전체" # 기본값 설정
-        # '대면' 또는 '혼합' 수업일 경우에만 캠퍼스 선택란 표시
+        selected_general_campus = "전체"
         if campus_col and ('대면' in selected_method or '혼합' in selected_method or selected_method == "전체"):
             with campus_col:
                 general_campus_options = sorted(df_after_method['캠퍼스구분'].dropna().unique().tolist())
@@ -360,20 +354,25 @@ if master_df is not None:
 
         st.write("---")
         
-        if not final_filtered_gen_df.empty: # DataFrame이 비어있지 않을 때만 정렬 및 apply 수행
+        # final_filtered_gen_df가 비어있는지 먼저 확인합니다.
+        if not final_filtered_gen_df.empty:
+            # 내용이 있을 때만 정렬하고, .apply().tolist()를 호출합니다.
             sorted_gen_df = final_filtered_gen_df.sort_values(
                 by=['수업방법', '교과목명'], ascending=[False, True]
             )
             course_options_gen = sorted_gen_df.apply(format_general_display_string, axis=1).tolist()
-        else: # DataFrame이 비어있으면 빈 리스트로 초기화
-            sorted_gen_df = final_filtered_gen_df # 빈 DataFrame 유지
+        else:
+            # 내용이 없으면 course_options_gen을 빈 리스트로 만듭니다.
             course_options_gen = []
         
+        # 이제 course_options_gen이 비어있으면 경고 메시지가 표시됩니다.
         if not course_options_gen:
             st.warning("해당 조건에 현재 추가 가능한 교양 과목이 없습니다.")
         else:
+            # sorted_gen_df가 비어있을 때 참조 오류가 나지 않도록 위에서 정의된 sorted_gen_df를 사용합니다.
             selected_course_str_gen = st.selectbox("추가할 교양 과목 선택", course_options_gen, key="general_select", label_visibility="collapsed")
             if st.button("교양 추가", key="add_general"):
+                # DataFrame이 비어있지 않을 때만 sorted_gen_df가 생성되므로, 여기서 참조합니다.
                 selected_row = sorted_gen_df[sorted_gen_df.apply(format_general_display_string, axis=1) == selected_course_str_gen].iloc[0]
                 code, no = selected_row['교과목코드'], selected_row['분반']
                 st.session_state.my_courses.append((code, no))
