@@ -363,32 +363,38 @@ if master_df is not None:
         st.info("과목을 추가하면 시간표가 여기에 표시됩니다.")
     else:
         my_courses_df = master_df[master_df.set_index(['교과목코드', '분반']).index.isin(st.session_state.my_courses)]
-        
-        # 1. 요일 목록 생성
-        all_class_days = set()
+
+        # 1. 요일 목록 생성 (기본: 월~금, 선택 과목에 토/일 있으면 추가)
+        days_to_display = ['월', '화', '수', '목', '금']
         for _, course in my_courses_df.iterrows():
             for time_info in course['parsed_time']:
-                all_class_days.add(time_info['day'])
+                if time_info['day'] == '토' and '토' not in days_to_display:
+                    days_to_display.append('토')
+                if time_info['day'] == '일' and '일' not in days_to_display:
+                    days_to_display.append('일')
 
-        days_to_display = ['월', '화', '수', '목', '금']
-        if '토' in all_class_days: days_to_display.append('토')
-        if '일' in all_class_days: days_to_display.append('일')
+        # 2. 최종 표시될 최소/최대 교시 동적으로 계산
+        # 기본적으로 1교시부터 9교시까지 표시
+        default_min_period = 1 # 기본 최소 교시를 1로 설정
+        default_max_period = 9 # 기본 최대 교시를 9로 설정
 
-        # 2. 최종 표시될 최대 교시 동적으로 계산
-        default_max_period = 9 # 기본적으로 9교시까지 표시
-        
-        # 현재 선택된 과목들 중 가장 늦은 교시를 찾는다.
         all_periods = [p for _, course in my_courses_df.iterrows() for time_info in course['parsed_time'] for p in time_info['periods']]
-        
-        # 실제 데이터에 있는 최대 교시 (과목이 없다면 0)
-        actual_max_period_in_data = max(all_periods) if all_periods else 0  
-        
-        # 최종적으로 시간표에 표시될 최대 교시는 기본값(9)과 실제 데이터의 최대 교시 중 더 큰 값으로 설정한다.
-        final_display_max_period = max(default_max_period, actual_max_period_in_data)
 
-        # 3. 최종 표시될 최대 교시에 맞춰 시간표 격자 생성
+        # 실제 데이터에 있는 교시 범위 (과목이 없으면 기본값으로 대체)
+        # 선택된 과목이 하나도 없을 경우 all_periods가 비어있으므로 max/min 호출 시 오류 발생 방지
+        # 과목이 없으면 '가장 빠른 교시'는 default_min_period, '가장 늦은 교시'는 default_max_period로 간주
+        actual_max_period_in_data = max(all_periods) if all_periods else default_max_period
+        actual_min_period_in_data = min(all_periods) if all_periods else default_min_period
+
+        # 최종 표시될 최대 교시는 기본 최대값과 실제 데이터의 최대 교시 중 더 큰 값
+        final_display_max_period = max(default_max_period, actual_max_period_in_data)
+        # 최종 표시될 최소 교시는 기본 최소값(1)과 실제 데이터의 최소 교시 중 더 작은 값
+        # (즉, 0교시가 있다면 0이 되고, 없으면 1이 유지됨)
+        final_display_min_period = min(default_min_period, actual_min_period_in_data)
+
+        # 3. 최종 표시될 최소/최대 교시에 맞춰 시간표 격자 생성
         timetable_data = {}
-        for p in range(1, final_display_max_period + 1): # <-- final_display_max_period 사용
+        for p in range(final_display_min_period, final_display_max_period + 1):
             for d in days_to_display:
                 timetable_data[(p, d)] = {"content": "", "color": "white", "span": 1, "is_visible": True}
 
@@ -398,12 +404,12 @@ if master_df is not None:
                 color = st.session_state.color_map.get(course['교과목명'], "white")
                 for time_info in course['parsed_time']:
                     if time_info['day'] not in days_to_display:
-                        continue
-                        
+                        continue # 시간표에 없는 요일은 건너뛴다.
+
                     content = f"<b>{course['교과목명']}</b><br>{course['교수명']}<br>{time_info['room']}"
                     periods = sorted(time_info['periods'])
                     if not periods: continue
-                    
+
                     start_period, block_len = periods[0], 1
                     for i in range(1, len(periods)):
                         if periods[i] == periods[i-1] + 1:
@@ -412,11 +418,11 @@ if master_df is not None:
                             # 생성된 시간표 격자 안에 있는 키인지 확인 후 업데이트
                             if (start_period, time_info['day']) in timetable_data:
                                 timetable_data[(start_period, time_info['day'])].update({"content": content, "color": color, "span": block_len})
-                                for j in range(1, block_len):  
+                                for j in range(1, block_len):
                                     if (start_period + j, time_info['day']) in timetable_data:
                                         timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
                             start_period, block_len = periods[i], 1
-                    
+
                     # 마지막 시간 블록 처리
                     if (start_period, time_info['day']) in timetable_data:
                         timetable_data[(start_period, time_info['day'])].update({"content": content, "color": color, "span": block_len})
@@ -424,19 +430,24 @@ if master_df is not None:
                             if (start_period + j, time_info['day']) in timetable_data:
                                 timetable_data[(start_period + j, time_info['day'])]["is_visible"] = False
 
-        day_col_width = (100 - 5 - 10) / len(days_to_display)
+        # '교시' 열의 너비
+        combined_period_col_width_percent = 10
+
+        # 남은 공간을 요일 열에 균등하게 분배
+        day_col_width = (100 - combined_period_col_width_percent) / len(days_to_display)
+
         html = f"""
         <style>
-        .timetable {{  
-            width: 100%;  
-            border-collapse: collapse;  
-            table-layout: fixed;  
+        .timetable {{
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
             border-bottom: 1px solid #e0e0e0;
         }}
-        .timetable th, .timetable td {{  
-            border: 1px solid #e0e0e0;  
-            text-align: center;  
-            vertical-align: middle;  
+        .timetable th, .timetable td {{
+            border: 1px solid #e0e0e0;
+            text-align: center;
+            vertical-align: middle;
             padding: 2px;
             height: 50px;
             font-size: 0.75em;
@@ -448,38 +459,43 @@ if master_df is not None:
         </style>
         <table class="timetable">
         <tr>
-        <th width="5%">교시</th>
-        <th width="10%">시간</th>
+        <th width="{combined_period_col_width_percent}%">교시</th>
         """
         for d in days_to_display:
             html += f'<th width="{day_col_width}%">{d}</th>'
         html += '</tr>'
-
-        time_map = {p: f"{p+8:02d}:00" for p in range(1, final_display_max_period + 1)}
         
-        # 최종 표시될 최대 교시까지 반복하여 HTML 테이블 행 생성
-        for p in range(1, final_display_max_period + 1): # <-- 이 부분을 final_display_max_period 사용
+        # 교시별 시작 시간을 매핑 (0교시가 있다면 8:00, 1교시는 9:00 등으로 조정)
+        time_map = {
+            0: "08:00", 1: "09:00", 2: "10:00", 3: "11:00", 4: "12:00",
+            5: "13:00", 6: "14:00", 7: "15:00", 8: "16:00", 9: "17:00",
+            10: "18:00", 11: "19:00", 12: "20:00", 13: "21:00", 14: "22:00", 15: "23:00" # 더 높은 교시도 고려
+        }
+
+        # 최종 표시될 최소/최대 교시까지 반복하여 HTML 테이블 행 생성
+        for p in range(final_display_min_period, final_display_max_period + 1):
             html += '<tr>'
-            html += f'<td>{p}</td><td>{time_map.get(p, "")}</td>'
+            html += f'<td>{p}교시<br>{time_map.get(p, "")}</td>'
             for d in days_to_display:
                 cell = timetable_data.get((p, d))
                 if cell and cell["is_visible"]:
                     html += f'<td rowspan="{cell["span"]}" style="background-color:{cell["color"]};">{cell["content"]}</td>'
             html += '</tr>'
-        
+
         html += "</table>"
-        
+
         total_credits = my_courses_df['학점'].sum()
         st.metric("총 신청 학점", f"{total_credits} 학점")
-        
-        # 최종 표시될 최대 교시에 맞춰 테이블 높이 조정
-        table_height = (final_display_max_period * 55) + 60 # <-- final_display_max_period 사용
-        st.components.v1.html(html, height=table_height, scrolling=True)
+
+        # 스크롤을 없애고 높이를 컨텐츠에 맞게 자동 조절
+        # 높이를 명시적으로 계산하여 빈 셀이 있더라도 전체 범위가 표시되도록 한다.
+        calculated_height = (final_display_max_period - final_display_min_period + 1) * 60 + 70
+        st.components.v1.html(html, height=calculated_height, scrolling=False)
 
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
         if untimed_courses:
             st.write("**[시간 미지정 과목]**")
-            for course in untimed_courses:  
+            for course in untimed_courses:
                 # 시간 미지정 과목에도 비고 정보 추가
                 remark_display = f" / 비고: {course['비고']}" if pd.notna(course['비고']) and course['비고'].strip() != '' else ''
                 # 원격강의구분 정보 추가
@@ -496,7 +512,7 @@ if master_df is not None:
                     display_str = format_major_display_string(course)
                 else: # 교양
                     display_str = format_general_display_string(course)
-                
+
                 # 완성된 문자열을 출력
                 st.write(f"- {display_str}")
                 st.caption(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (교과목코드: {code}, 분반: {no})")
