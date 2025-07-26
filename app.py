@@ -141,9 +141,12 @@ def format_major_display_string(x):
     if ('비대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['원격강의구분']) and x['원격강의구분'].strip() != '':
         remote_info = f"({x['원격강의구분']})"
 
+    # x['분반']을 세 자리 숫자로 포맷
+    formatted_bunban = f"{int(x['분반']):03d}"
+
     base_str = (
         f"[{x['대상학년']}/{x['이수구분']}{method_campus_info}{remote_info}] "
-        f"{x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+        f"{x['교과목명']} ({x['교수명']}, {formatted_bunban}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
     )
         
     # 비고 내용이 있다면 추가
@@ -168,9 +171,12 @@ def format_general_display_string(x):
 
     area_info = f"/{x['영역구분']}" if x['영역구분'] and x['영역구분'].strip() != '' else ""
 
+    # x['분반']을 세 자리 숫자로 포맷
+    formatted_bunban = f"{int(x['분반']):03d}"
+
     base_str = (
         f"[{x['이수구분']}{area_info}{method_campus_info}{remote_info}] "
-        f"{x['교과목명']} ({x['교수명']}, {x['분반']}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+        f"{x['교과목명']} ({x['교수명']}, {formatted_bunban}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
     )
 
     # 비고 내용이 있다면 추가
@@ -366,7 +372,7 @@ if master_df is not None:
 
         # 1. 요일 목록 생성 (고정 순서: 월화수목금토일)
         days_order = ['월', '화', '수', '목', '금', '토', '일'] # 고정된 요일 순서
-        days_to_display_set = set() # 현재 표시할 요일들을 집합으로 관리
+        days_to_display_set = set(['월', '화', '수', '목', '금']) # 현재 표시할 요일들을 집합으로 관리 (기본 월~금 포함)
 
         for _, course in my_courses_df.iterrows():
             for time_info in course['parsed_time']:
