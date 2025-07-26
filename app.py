@@ -144,9 +144,15 @@ def format_major_display_string(x):
     # x['분반']을 세 자리 숫자로 포맷
     formatted_bunban = f"{int(x['분반']):03d}"
 
+    # 학점 포맷 변경: 정수일 경우 소수점 제거
+    if x['학점'] == int(x['학점']):
+        formatted_hakjeom = f"{int(x['학점'])}학점"
+    else:
+        formatted_hakjeom = f"{x['학점']}학점"
+
     base_str = (
         f"[{x['대상학년']}/{x['이수구분']}{method_campus_info}{remote_info}] "
-        f"{x['교과목명']} ({x['교수명']}, {formatted_bunban}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+        f"{x['교과목명']} ({x['교수명']}, {formatted_bunban}반, {formatted_hakjeom}) / {format_time_for_display(x['parsed_time'])}"
     )
         
     # 비고 내용이 있다면 추가
@@ -174,9 +180,15 @@ def format_general_display_string(x):
     # x['분반']을 세 자리 숫자로 포맷
     formatted_bunban = f"{int(x['분반']):03d}"
 
+    # 학점 포맷 변경: 정수일 경우 소수점 제거
+    if x['학점'] == int(x['학점']):
+        formatted_hakjeom = f"{int(x['학점'])}학점"
+    else:
+        formatted_hakjeom = f"{x['학점']}학점"
+
     base_str = (
         f"[{x['이수구분']}{area_info}{method_campus_info}{remote_info}] "
-        f"{x['교과목명']} ({x['교수명']}, {formatted_bunban}반, {x['학점']}학점) / {format_time_for_display(x['parsed_time'])}"
+        f"{x['교과목명']} ({x['교수명']}, {formatted_bunban}반, {formatted_hakjeom}) / {format_time_for_display(x['parsed_time'])}"
     )
 
     # 비고 내용이 있다면 추가
