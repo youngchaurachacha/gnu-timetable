@@ -364,14 +364,16 @@ if master_df is not None:
     else:
         my_courses_df = master_df[master_df.set_index(['교과목코드', '분반']).index.isin(st.session_state.my_courses)]
 
-        # 1. 요일 목록 생성 (기본: 월~금, 선택 과목에 토/일 있으면 추가)
-        days_to_display = ['월', '화', '수', '목', '금']
+        # 1. 요일 목록 생성 (고정 순서: 월화수목금토일)
+        days_order = ['월', '화', '수', '목', '금', '토', '일'] # 고정된 요일 순서
+        days_to_display_set = set() # 현재 표시할 요일들을 집합으로 관리
+
         for _, course in my_courses_df.iterrows():
             for time_info in course['parsed_time']:
-                if time_info['day'] == '토' and '토' not in days_to_display:
-                    days_to_display.append('토')
-                if time_info['day'] == '일' and '일' not in days_to_display:
-                    days_to_display.append('일')
+                days_to_display_set.add(time_info['day']) # 선택된 과목의 요일을 집합에 추가
+
+        # 고정된 순서에 따라 실제 표시할 요일 리스트를 재구성
+        days_to_display = [day for day in days_order if day in days_to_display_set]
 
         # 2. 최종 표시될 최소/최대 교시 동적으로 계산
         # 기본적으로 1교시부터 9교시까지 표시
