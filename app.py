@@ -216,21 +216,23 @@ if master_df is not None:
     tab_major, tab_general = st.tabs(["🎓 전공 과목 선택", "📚 교양 과목 선택"])
     
     with tab_major:
-        majors_df = available_df[available_df['type'] == '전공']
+        all_majors_df = master_df[master_df['type'] == '전공']
+        majors_df_to_display = available_df[available_df['type'] == '전공']
         
-        col1, col2, col3, col4 = st.columns(4) # 캠퍼스 선택을 위해 컬럼 하나 더 추가
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            department_options = sorted(majors_df['학부(과)'].dropna().unique().tolist())
+            department_options = sorted(all_majors_df['학부(과)'].dropna().unique().tolist())
             selected_depts = st.multiselect("전공 학부(과)", department_options, key="depts_multiselect")
 
-        df_after_dept = majors_df
+        df_after_dept = majors_df_to_display
         if selected_depts:
-            df_after_dept = majors_df[majors_df['학부(과)'].isin(selected_depts)]
+            df_after_dept = majors_df_to_display[majors_df_to_display['학부(과)'].isin(selected_depts)]
 
         with col2:
+            grade_source_df = all_majors_df[all_majors_df['학부(과)'].isin(selected_depts)] if selected_depts else all_majors_df
             grade_options = sorted(
-                df_after_dept['대상학년'].dropna().unique(),
+                grade_source_df['대상학년'].dropna().unique(),
                 key=lambda x: int(re.search(r'\d+', str(x)).group()) if re.search(r'\d+', str(x)) else 99
             )
             selected_grade = st.selectbox("학년", ["전체"] + grade_options, key="grade_select")
@@ -240,15 +242,17 @@ if master_df is not None:
             df_after_grade = df_after_dept[df_after_dept['대상학년'] == selected_grade]
 
         with col3:
-            type_options = sorted(df_after_grade['이수구분'].dropna().unique().tolist())
+            type_source_df = df_after_grade if selected_grade != "전체" else grade_source_df
+            type_options = sorted(type_source_df['이수구분'].dropna().unique().tolist())
             selected_course_type = st.selectbox("이수구분", ["전체"] + type_options, key="course_type_select")
 
         df_after_course_type = df_after_grade
         if selected_course_type != "전체":
             df_after_course_type = df_after_course_type[df_after_course_type['이수구분'] == selected_course_type]
             
-        with col4: # 전공 과목 캠퍼스 선택란 추가
-            major_campus_options = sorted(df_after_course_type['캠퍼스구분'].dropna().unique().tolist())
+        with col4:
+            campus_source_df = df_after_course_type if selected_course_type != "전체" else type_source_df
+            major_campus_options = sorted(campus_source_df['캠퍼스구분'].dropna().unique().tolist())
             selected_major_campus = st.selectbox("캠퍼스", ["전체"] + major_campus_options, key="major_campus_select")
 
         final_filtered_df = df_after_course_type
@@ -260,6 +264,7 @@ if master_df is not None:
         if not selected_depts:
             st.info("먼저 전공 학부(과)를 선택해주세요.")
         else:
+            sorted_df = pd.DataFrame(columns=final_filtered_df.columns)
             if not final_filtered_df.empty:
                 temp_df = final_filtered_df.copy()
                 temp_df['grade_num'] = temp_df['대상학년'].str.extract(r'(\d+)').astype(float).fillna(99)
@@ -268,10 +273,13 @@ if master_df is not None:
                     by=['grade_num', '이수구분', '교과목명'],
                     ascending=[True, False, True]
                 )
+            
+            # sorted_df가 비어있는지 확인하는 로직 추가
+            if sorted_df.empty:
+                course_options = []  # 데이터프레임이 비어있으면, course_options는 빈 리스트
             else:
-                sorted_df = final_filtered_df
-
-            course_options = sorted_df.apply(format_major_display_string, axis=1).tolist()
+                # 비어있지 않을 때만 .apply().tolist()를 실행
+                course_options = sorted_df.apply(format_major_display_string, axis=1).tolist()
             
             if not course_options:
                 st.warning("선택한 조건에 현재 추가 가능한 전공 과목이 없습니다.")
