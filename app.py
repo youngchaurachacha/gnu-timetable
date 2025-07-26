@@ -535,7 +535,8 @@ if master_df is not None:
 
                 # 완성된 문자열을 출력
                 st.write(f"- {display_str}")
-                st.caption(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (교과목코드: {code}, 분반: {no})")
+                formatted_caption_bunban = f"{int(no):03d}"
+                st.caption(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (교과목코드: {code}, 분반: {formatted_caption_bunban})")
             with col2:
                 if st.button("제거", key=f"del-{code}-{no}"):
                     st.session_state.my_courses.remove((code, no))
