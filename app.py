@@ -257,7 +257,7 @@ if master_df is not None:
         df_after_method = df_after_area[df_after_area['수업방법'] == selected_method] if selected_method != "전체" else df_after_area
         
         with col4:
-            remote_options = sorted(df_after_method['원격강의구분'].dropna().unique().tolist())
+            remote_options = sorted([opt for opt in df_after_method['원격강의구분'].dropna().unique() if opt.strip()])
             selected_remote = st.selectbox("원격강의구분", ["전체"] + remote_options, key="remote_select")
         df_after_remote = df_after_method[df_after_method['원격강의구분'] == selected_remote] if selected_remote != "전체" else df_after_method
         
