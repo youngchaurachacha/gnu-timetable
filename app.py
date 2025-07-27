@@ -567,7 +567,7 @@ if master_df is not None:
             /* 복사 안 되는 글머리 기호 스타일 (헤더에 사용된 것) */
             .bullet-item::before {
                 content: '●';
-                font-size: 0.4em; /* 헤더 글머리 기호 크기 유지 */
+                font-size: 0.6em; /* 헤더 글머리 기호 크기 유지 */
                 margin-right: 0.4rem;
                 user-select: none;
             }
@@ -575,7 +575,7 @@ if master_df is not None:
             /* 선택한 과목 목록의 글머리 기호 스타일 */
             .course-list-item::before {
                 content: '●';
-                font-size: 0.3em; /* 과목 목록 글머리 기호 크기 조정 */
+                font-size: 0.5em; /* 과목 목록 글머리 기호 크기 조정 */
                 margin-right: 9px; /* 기존 하이픈과 동일한 간격 */
                 user-select: none; /* 복사 안 되게 설정 */
             }
