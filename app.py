@@ -168,6 +168,38 @@ def format_display_string(x):
         
     return base_str
 
+def format_list_item_string(x):
+    method_campus_info = ""
+    if pd.notna(x['수업방법']) and x['수업방법'].strip() != '':
+        if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']) and x['캠퍼스구분'].strip() != '':
+            method_campus_info = f"/{x['수업방법']}({x['캠퍼스구분']})"
+        else:
+            method_campus_info = f"/{x['수업방법']}"
+
+    remote_info = ""
+    if ('비대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['원격강의구분']) and x['원격강의구분'].strip() != '':
+        remote_info = f"({x['원격강의구분']})"
+
+    # formatted_bunban = f"{int(x['분반']):03d}" # 여기서는 제거
+    # formatted_hakjeom = f"{int(x['학점'])}학점" if x['학점'] == int(x['학점']) else f"{x['학점']}학점" # 여기서는 제거
+
+    time_display = x['강의시간/강의실'] if pd.notna(x['강의시간/강의실']) else "시간미지정"
+
+    if x['type'] == '전공':
+        type_specific_info = f"[{x['대상학년']}/{x['이수구분']}"
+    else:
+        area_info = f"/{x['영역구분']}" if pd.notna(x['영역구분']) and x['영역구분'].strip() else ""
+        type_specific_info = f"[{x['이수구분']}{area_info}"
+
+    # 이 부분에서 분반과 학점을 제외
+    base_str = (f"{type_specific_info}{method_campus_info}{remote_info}] "
+                f"{x['교과목명']} ({x['교수명']}) / {time_display}")
+
+    if pd.notna(x['비고']) and x['비고'].strip() != '':
+        base_str += f" / 비고: {x['비고']}"
+
+    return base_str
+
 def add_course_to_timetable(course_row):
     """선택된 과목(row)을 세션에 추가하고, 색상을 할당한 뒤 앱을 새로고침한다."""
     code, no = course_row['교과목코드'], course_row['분반']
@@ -508,7 +540,6 @@ if master_df is not None:
         list_col, button_col = st.columns([0.85, 0.15])
         with list_col:
             num_selected_courses = len(st.session_state.my_courses)
-            # my_courses_df는 이 코드 블록 이전에 정의되어 있음
             total_credits = my_courses_df['학점'].sum()
             total_credits_str = str(int(total_credits)) if total_credits == int(total_credits) else f"{total_credits:.1f}"
 
@@ -531,132 +562,44 @@ if master_df is not None:
                 st.session_state.color_map = {}
                 st.rerun()
 
-        # 2. 선택된 과목 목록 (표 형식 UI) - 최종 격자 스타일
-        # CSS를 주입하여 표 스타일을 미세 조정
         st.markdown("""
         <style>
-            /* 복사 안 되는 글머리 기호 스타일 */
+            /* 복사 안 되는 글머리 기호 스타일 (헤더에 사용된 것) */
             .bullet-item::before {
                 content: '●';
-                font-size: 0.6em;
+                font-size: 0.4em; /* 헤더 글머리 기호 크기 유지 */
                 margin-right: 0.4rem;
-                user-select: none; /* 선택 안 되게 설정 */
+                user-select: none;
             }
-            .styled-table {
-                border-top: 1px solid #cccccc;
-            }
-            /* 모든 행(stHorizontalBlock)에 대한 공통 스타일 */
-            .styled-table [data-testid="stHorizontalBlock"] {
-                border-bottom: 1px solid #cccccc;
-                align-items: stretch; /* 셀 높이 통일 */
-            }
-            /* 홀수번째 행(헤더, 2, 4, 6... 데이터 행)에 배경색 적용 */
-            .styled-table [data-testid="stHorizontalBlock"]:nth-child(odd) {
-                background-color: aliceblue;
-            }
-            /* 헤더 행(첫번째 자식)은 배경색 다시 흰색으로 오버라이드 */
-            .styled-table [data-testid="stHorizontalBlock"]:first-child {
-                background-color: white !important;
-            }
-            /* 모든 셀(컬럼)에 대한 공통 스타일 */
-            .styled-table [data-testid="stHorizontalBlock"] [data-testid="column"] {
-                border-right: 1px solid #cccccc;
-                padding: 0.2rem 0.4rem !important;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                text-align: center;
-                word-break: break-all;
-            }
-            /* 마지막 셀은 오른쪽 테두리 제거 */
-            .styled-table [data-testid="stHorizontalBlock"] [data-testid="column"]:last-child {
-                border-right: none;
-            }
-            /* 삭제 버튼 */
-            .styled-table button {
-                padding: 0.1rem 0.5rem !important;
-                font-size: 12px !important;
-                height: 24px;
+
+            /* 선택한 과목 목록의 글머리 기호 스타일 */
+            .course-list-item::before {
+                content: '●';
+                font-size: 0.3em; /* 과목 목록 글머리 기호 크기 조정 */
+                margin-right: 9px; /* 기존 하이픈과 동일한 간격 */
+                user-select: none; /* 복사 안 되게 설정 */
             }
         </style>
         """, unsafe_allow_html=True)
 
-        # 전체 표를 감싸는 컨테이너
-        with st.container():
-            st.markdown('<div class="styled-table">', unsafe_allow_html=True)
-            
-            # 표 헤더 생성 (학년 열 제거, 10개 컬럼)
-            headers = ['이수구분(학년/영역)', '교과목명', '교수명', '강의시간', '교과목코드', '분반', '학점', '수업방법', '비고', '삭제']
-            header_cols = st.columns([0.15, 0.15, 0.10, 0.14, 0.09, 0.05, 0.05, 0.10, 0.11, 0.06])
-            for col, header in zip(header_cols, headers):
-                col.markdown(f"**{header}**")
+        for index, (code, no) in enumerate(st.session_state.my_courses):
+            course = master_df[(master_df['교과목코드'] == code) & (master_df['분반'] == no)].iloc[0]
+            col1, col2 = st.columns([0.8, 0.2])
+            with col1:
+                # format_display_string 대신 format_list_item_string 호출
+                display_str = format_list_item_string(course) 
 
-            # 선택된 과목 데이터 행
-            for index, (code, no) in enumerate(st.session_state.my_courses):
-                course = master_df[(master_df['교과목코드'] == code) & (master_df['분반'] == no)].iloc[0]
-                
-                data_cols = st.columns([0.15, 0.15, 0.10, 0.14, 0.09, 0.05, 0.05, 0.10, 0.11, 0.06])
-                
-                # --- 각 셀의 내용 생성 ---
-                
-                # 이수구분, 학년, 영역 정보를 하나로 결합
-                isu_text = course['이수구분']
-                if isu_text == '전필':
-                    isu_text = '전공필수'
-                elif isu_text == '전선':
-                    isu_text = '전공선택'
-                
-                detail_info = ""
-                if course['type'] == '전공' and pd.notna(course['대상학년']) and course['대상학년'].strip():
-                    detail_info = course['대상학년']
-                elif pd.notna(course['영역구분']) and course['영역구분'].strip():
-                    detail_info = course['영역구분']
+                st.markdown(f"""
+                <div style="display: flex; align-items: baseline;" class="course-list-item">
+                    <div style="word-break: break-all; overflow-wrap: break-word;">
+                        {display_str}
+                        <div style="opacity: 0.7;">(교과목코드: {code}, 분반: {int(no):03d}, 학점: {int(course['학점']) if course['학점'] == int(course['학점']) else course['학점']}학점)</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                if detail_info:
-                    isu_text = f"{isu_text}({detail_info})"
-                data_cols[0].write(isu_text)
-                
-                data_cols[1].write(course['교과목명'])
-                data_cols[2].write(course['교수명'])
-
-                # 강의시간/강의실 정보. 쉼표를 기준으로 줄바꿈 처리
-                time_str = course['강의시간/강의실'] if pd.notna(course['강의시간/강의실']) else ""
-                if time_str:
-                    time_parts = re.split(r',(?=[월화수목금토일])', time_str)
-                    formatted_time = '<br>'.join(time_parts)
-                    data_cols[3].markdown(formatted_time, unsafe_allow_html=True)
-                else:
-                    data_cols[3].write("")
-
-                data_cols[4].write(str(course['교과목코드']))
-                data_cols[5].write(f"{int(course['분반']):03d}")
-                
-                hakjeom = int(course['학점']) if course['학점'] == int(course['학점']) else course['학점']
-                data_cols[6].write(str(hakjeom))
-                
-                # 수업방식 + 캠퍼스 + 원격 정보 결합
-                method_text = course['수업방법']
-                details = []
-                if pd.notna(course['캠퍼스구분']) and course['캠퍼스구분'].strip():
-                    campus_short = course['캠퍼스구분'].split('캠퍼스')[0]
-                    details.append(campus_short)
-                if pd.notna(course['원격강의구분']) and course['원격강의구분'].strip():
-                     details.append(course['원격강의구분'])
-                
-                if details:
-                    method_text += f"<br><small>({', '.join(details)})</small>"
-                data_cols[7].markdown(method_text, unsafe_allow_html=True)
-
-                # 비고 폰트 크기 작게 수정
-                b_text = course['비고']
-                if pd.notna(b_text) and b_text.strip():
-                    data_cols[8].markdown(f"<small>{b_text}</small>", unsafe_allow_html=True)
-                else:
-                    data_cols[8].write("") 
-
-                with data_cols[9]:
-                    if st.button("삭제", key=f"del_table_{code}_{no}", use_container_width=True):
-                        st.session_state.my_courses.pop(index)
-                        st.rerun()
-            
-            st.markdown('</div>', unsafe_allow_html=True)
+            with col2:
+                # 삭제 버튼의 key는 고유해야 하므로 index도 포함
+                if st.button("제거", key=f"del-{code}-{no}-{index}", use_container_width=True, type="secondary"):
+                    st.session_state.my_courses.pop(index)
+                    st.rerun()
