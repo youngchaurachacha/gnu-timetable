@@ -49,6 +49,7 @@ PREDEFINED_COLORS = [
 def load_and_process_data(file_path, major_sheet, general_sheet):
     """
     원본 엑셀 파일에서 데이터를 읽고, 수업방식/영역구분 등 모든 정보를 포함하여 처리한다.
+    (최적화) 각 과목의 모든 시간 슬롯을 미리 집합(set)으로 계산하여 'time_slots_set' 컬럼에 저장한다.
     """
     try:
         df_major = pd.read_excel(file_path, sheet_name=major_sheet)
@@ -90,22 +91,52 @@ def load_and_process_data(file_path, major_sheet, general_sheet):
         return parsed
 
     df_combined['parsed_time'] = df_combined['강의시간/강의실'].apply(parse_time)
+    
+    # 각 과목의 (요일, 교시) 튜플을 set으로 미리 만들어 저장한다.
+    def create_time_slots_set(parsed_time_list):
+        slots = set()
+        if not isinstance(parsed_time_list, list): return slots
+        for time_info in parsed_time_list:
+            for period in time_info['periods']:
+                slots.add((time_info['day'], period))
+        return slots
+    
+    # 이 연산은 앱 로딩 시 한번만 실행된다.
+    df_combined['time_slots_set'] = df_combined['parsed_time'].apply(create_time_slots_set)
+    
     return df_combined
 
 def get_available_courses(df, selected_codes):
-    if not selected_codes: return df
-    my_timed_schedule = [t for code, no in selected_codes for t in df.loc[(df['교과목코드'] == code) & (df['분반'] == no), 'parsed_time'].iloc[0]]
+    """
+    (최적화된 버전) 선택된 과목 리스트를 기반으로 수강 가능한 과목 목록을 필터링한다.
+    1. 동일 교과목코드 과목을 먼저 제외한다.
+    2. 선택된 과목들의 모든 시간 슬롯을 하나의 큰 집합(my_busy_slots)으로 만든다.
+    3. 전체 과목을 순회하며 각 과목의 시간 집합이 my_busy_slots과 겹치는지(isdisjoint) 확인한다.
+    """
+    if not selected_codes:
+        return df
+
+    # 1. 이미 선택한 '교과목코드'가 같은 과목들은 목록에서 제외
     my_course_codes = {code for code, no in selected_codes}
-    available_mask = ~df['교과목코드'].isin(my_course_codes)
-    for t in my_timed_schedule:
-        day, periods = t['day'], set(t['periods'])
-        possible_conflicts_indices = df[available_mask & df['parsed_time'].apply(lambda pts: any(p['day'] == day for p in pts))].index
-        for index in possible_conflicts_indices:
-            if any(p['day'] == day and not set(p['periods']).isdisjoint(periods) for p in df.loc[index, 'parsed_time']):
-                available_mask.loc[index] = False
-    return df[available_mask]
+    available_df = df[~df['교과목코드'].isin(my_course_codes)]
 
-def format_major_display_string(x):
+    # 2. 내가 선택한 과목들이 차지하는 모든 시간 슬롯을 하나의 집합으로 통합
+    my_courses_df = df[df.set_index(['교과목코드', '분반']).index.isin(selected_codes)]
+    my_busy_slots = set().union(*my_courses_df['time_slots_set'])
+    
+    # 선택한 과목 중에 시간이 지정된 과목이 없으면 시간 필터링 불필요
+    if not my_busy_slots:
+        return available_df
+
+    # 3. 남은 과목들 중, 나의 '바쁜 시간'과 겹치지 않는 과목만 최종 선택
+    #    set.isdisjoint()는 두 집합이 겹치지 않으면 True를 반환. list 순회보다 훨씬 빠르다.
+    is_available_time = available_df['time_slots_set'].apply(lambda course_slots: course_slots.isdisjoint(my_busy_slots))
+    
+    return available_df[is_available_time]
+
+def format_display_string(x):
+    """(통합 버전) 과목의 시리즈(행)를 받아 전공/교양에 맞춰 UI에 표시할 문자열을 생성한다."""
+    # 공통 정보 구성
     method_campus_info = ""
     if pd.notna(x['수업방법']) and x['수업방법'].strip() != '':
         if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']) and x['캠퍼스구분'].strip() != '':
@@ -120,39 +151,41 @@ def format_major_display_string(x):
     formatted_bunban = f"{int(x['분반']):03d}"
     formatted_hakjeom = f"{int(x['학점'])}학점" if x['학점'] == int(x['학점']) else f"{x['학점']}학점"
     time_display = x['강의시간/강의실'] if pd.notna(x['강의시간/강의실']) else "시간미지정"
-
-    base_str = (f"[{x['대상학년']}/{x['이수구분']}{method_campus_info}{remote_info}] "
+    
+    # 타입에 따른 분기 처리
+    if x['type'] == '전공':
+        type_specific_info = f"[{x['대상학년']}/{x['이수구분']}"
+    else:  # '교양'
+        area_info = f"/{x['영역구분']}" if pd.notna(x['영역구분']) and x['영역구분'].strip() else ""
+        type_specific_info = f"[{x['이수구분']}{area_info}"
+        
+    # 최종 문자열 조합
+    base_str = (f"{type_specific_info}{method_campus_info}{remote_info}] "
                 f"{x['교과목명']} ({x['교수명']}, {formatted_bunban}반, {formatted_hakjeom}) / {time_display}")
     
     if pd.notna(x['비고']) and x['비고'].strip() != '':
         base_str += f" / 비고: {x['비고']}"
+        
     return base_str
 
-def format_general_display_string(x):
-    method_campus_info = ""
-    if pd.notna(x['수업방법']) and x['수업방법'].strip() != '':
-        if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']) and x['캠퍼스구분'].strip() != '':
-            method_campus_info = f"/{x['수업방법']}({x['캠퍼스구분']})"
-        else:
-            method_campus_info = f"/{x['수업방법']}"
+def add_course_to_timetable(course_row):
+    """선택된 과목(row)을 세션에 추가하고, 색상을 할당한 뒤 앱을 새로고침한다."""
+    code, no = course_row['교과목코드'], course_row['분반']
     
-    remote_info = ""
-    if ('비대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['원격강의구분']) and x['원격강의구분'].strip() != '':
-        remote_info = f"({x['원격강의구분']})"
+    # 이미 추가된 과목인지 확인 (필수는 아니지만, 사용자 편의성을 위해 추가 가능)
+    if (code, no) in st.session_state.my_courses:
+        st.warning(f"'{course_row['교과목명']}' 과목은 이미 목록에 있습니다.")
+        return
 
-    # '영역구분'에 값이 있을 때만 '/영역구분' 형태로 만듭니다.
-    area_info = f"/{x['영역구분']}" if pd.notna(x['영역구분']) and x['영역구분'].strip() else ""
+    st.session_state.my_courses.append((code, no))
     
-    formatted_bunban = f"{int(x['분반']):03d}"
-    formatted_hakjeom = f"{int(x['학점'])}학점" if x['학점'] == int(x['학점']) else f"{x['학점']}학점"
-    time_display = x['강의시간/강의실'] if pd.notna(x['강의시간/강의실']) else "시간미지정"
-
-    base_str = (f"[{x['이수구분']}{area_info}{method_campus_info}{remote_info}] "
-                f"{x['교과목명']} ({x['교수명']}, {formatted_bunban}반, {formatted_hakjeom}) / {time_display}")
-
-    if pd.notna(x['비고']) and x['비고'].strip() != '':
-        base_str += f" / 비고: {x['비고']}"
-    return base_str
+    # 색상 맵에 과목명 없으면 새 색상 할당
+    if course_row['교과목명'] not in st.session_state.color_map:
+        next_color_index = len(st.session_state.color_map) % len(PREDEFINED_COLORS)
+        st.session_state.color_map[course_row['교과목명']] = PREDEFINED_COLORS[next_color_index]
+        
+    st.success(f"'{course_row['교과목명']}' 과목을 추가했습니다.")
+    st.rerun()
 
 # --- 웹앱 UI 및 로직 ---
 excel_file_path = '경상국립대학교 2025학년도 2학기 시간표.xlsx'
@@ -172,35 +205,52 @@ if master_df is not None:
     tab_major, tab_general = st.tabs(["🎓 전공 과목 선택", "📚 교양 과목 선택"])
     
     with tab_major:
+        # 필터링의 기반이 될 데이터프레임 정의
         all_majors_df = master_df[master_df['type'] == '전공']
         majors_df_to_display = available_df[available_df['type'] == '전공']
         
+        # --- 1. 필터 위젯 배치 및 사용자 선택값 받기 ---
         col1, col2, col3, col4 = st.columns(4)
+        
         with col1:
             department_options = sorted(all_majors_df['학부(과)'].dropna().unique().tolist())
             selected_depts = st.multiselect("전공 학부(과)", department_options, key="depts_multiselect")
 
-        df_after_dept = majors_df_to_display[majors_df_to_display['학부(과)'].isin(selected_depts)] if selected_depts else majors_df_to_display
+        # 사용자의 선택에 따라 다음 필터들의 '옵션'을 동적으로 만들기 위한 데이터프레임
+        options_df = all_majors_df[all_majors_df['학부(과)'].isin(selected_depts)] if selected_depts else all_majors_df
 
         with col2:
-            grade_source_df = all_majors_df[all_majors_df['학부(과)'].isin(selected_depts)] if selected_depts else all_majors_df
-            grade_options = sorted(grade_source_df['대상학년'].dropna().unique(), key=lambda x: int(re.search(r'\d+', str(x)).group()) if re.search(r'\d+', str(x)) else 99)
+            grade_options = sorted(options_df['대상학년'].dropna().unique(), key=lambda x: int(re.search(r'\d+', str(x)).group()) if re.search(r'\d+', str(x)) else 99)
             selected_grade = st.selectbox("학년", ["전체"] + grade_options, key="grade_select")
-        df_after_grade = df_after_dept[df_after_dept['대상학년'] == selected_grade] if selected_grade != "전체" else df_after_dept
+
+        if selected_grade != "전체":
+            options_df = options_df[options_df['대상학년'] == selected_grade]
 
         with col3:
-            type_source_df = df_after_grade if selected_grade != "전체" else grade_source_df
-            type_options = sorted(type_source_df['이수구분'].dropna().unique().tolist())
+            type_options = sorted(options_df['이수구분'].dropna().unique().tolist())
             selected_course_type = st.selectbox("이수구분", ["전체"] + type_options, key="course_type_select")
-        df_after_course_type = df_after_grade[df_after_grade['이수구분'] == selected_course_type] if selected_course_type != "전체" else df_after_grade
-            
+
+        if selected_course_type != "전체":
+            options_df = options_df[options_df['이수구분'] == selected_course_type]
+
         with col4:
-            campus_source_df = df_after_course_type if selected_course_type != "전체" else type_source_df
-            major_campus_options = sorted(campus_source_df['캠퍼스구분'].dropna().unique().tolist())
+            major_campus_options = sorted(options_df['캠퍼스구분'].dropna().unique().tolist())
             selected_major_campus = st.selectbox("캠퍼스", ["전체"] + major_campus_options, key="major_campus_select")
-        final_filtered_df = df_after_course_type[df_after_course_type['캠퍼스구분'] == selected_major_campus] if selected_major_campus != "전체" else df_after_course_type
+
+        # --- 2. 모든 필터 값을 사용해 최종 데이터 필터링 (간소화된 부분) ---
+        # 하나의 변수(final_filtered_df)를 계속해서 필터링
+        final_filtered_df = majors_df_to_display.copy() # 원본은 건드리지 않도록 복사
+        if selected_depts:
+            final_filtered_df = final_filtered_df[final_filtered_df['학부(과)'].isin(selected_depts)]
+        if selected_grade != "전체":
+            final_filtered_df = final_filtered_df[final_filtered_df['대상학년'] == selected_grade]
+        if selected_course_type != "전체":
+            final_filtered_df = final_filtered_df[final_filtered_df['이수구분'] == selected_course_type]
+        if selected_major_campus != "전체":
+            final_filtered_df = final_filtered_df[final_filtered_df['캠퍼스구분'] == selected_major_campus]
 
         st.write("---")
+
         if not selected_depts:
             st.info("먼저 전공 학부(과)를 선택해주세요.")
         else:
@@ -210,83 +260,120 @@ if master_df is not None:
                 temp_df['grade_num'] = temp_df['대상학년'].str.extract(r'(\d+)').astype(float).fillna(99)
                 sorted_df = temp_df.sort_values(by=['grade_num', '이수구분', '교과목명'], ascending=[True, False, True])
             
-            course_options = sorted_df.apply(format_major_display_string, axis=1).tolist() if not sorted_df.empty else []
+            course_options = sorted_df.apply(format_display_string, axis=1).tolist() if not sorted_df.empty else []
             
             if not course_options:
                 st.warning("선택한 조건에 현재 추가 가능한 전공 과목이 없습니다.")
             else:
-                selected_course_str = st.selectbox("추가할 전공 과목 선택", course_options, key="major_select", label_visibility="collapsed")
+                # options로는 데이터프레임의 '인덱스'를 사용한다.
+                # format_func를 사용해 사용자에게는 포맷팅된 문자열을 보여준다.
+                selected_index = st.selectbox(
+                    "추가할 전공 과목 선택",
+                    options=sorted_df.index,
+                    format_func=lambda idx: format_display_string(sorted_df.loc[idx]),
+                    key="major_select",
+                    label_visibility="collapsed"
+                )
                 if st.button("전공 추가", key="add_major"):
-                    selected_row = sorted_df[sorted_df.apply(format_major_display_string, axis=1) == selected_course_str].iloc[0]
-                    code, no = selected_row['교과목코드'], selected_row['분반']
-                    st.session_state.my_courses.append((code, no))
-                    if selected_row['교과목명'] not in st.session_state.color_map:
-                        next_color_index = len(st.session_state.color_map) % len(PREDEFINED_COLORS)
-                        st.session_state.color_map[selected_row['교과목명']] = PREDEFINED_COLORS[next_color_index]
-                    st.success(f"'{selected_row['교과목명']}' 과목을 추가했습니다.")
-                    st.rerun()
+                    # apply 없이 인덱스로 바로 행을 찾는다. (매우 빠름)
+                    selected_row = sorted_df.loc[selected_index]
+                    add_course_to_timetable(selected_row)
 
     with tab_general:
-        general_df = available_df[available_df['type'] == '교양']
+        # 필터링 기반 데이터 정의
+        all_general_df = master_df[master_df['type'] == '교양']
+        general_df_to_display = available_df[available_df['type'] == '교양']
+
+        # --- 1. 필터 위젯 배치 및 사용자 선택값 받기 ---
         col1, col2, col3, col4, col5 = st.columns(5)
 
         with col1:
-            cat_options = sorted(master_df[master_df['type'] == '교양']['이수구분'].dropna().unique().tolist())
+            cat_options = sorted(all_general_df['이수구분'].dropna().unique().tolist())
             selected_cat = st.selectbox("이수구분", ["전체"] + cat_options, key="cat_select")
-        df_after_cat = general_df[general_df['이수구분'] == selected_cat] if selected_cat != "전체" else general_df
+
+        # 옵션 생성을 위한 데이터프레임
+        options_df = all_general_df[all_general_df['이수구분'] == selected_cat] if selected_cat != "전체" else all_general_df
 
         with col2:
             if selected_cat == '일반선택':
-                sub_cat_options = ['전체', '꿈·미래개척', '그 외 일반선택']
-                selected_sub_cat = st.selectbox("일반선택 세부 유형", sub_cat_options, key="sub_cat_select")
-                if selected_sub_cat == '꿈·미래개척':
-                    df_after_area = df_after_cat[df_after_cat['교과목명'] == '꿈·미래개척']
-                elif selected_sub_cat == '그 외 일반선택':
-                    df_after_area = df_after_cat[df_after_cat['교과목명'] != '꿈·미래개척']
-                else:
-                    df_after_area = df_after_cat
+                # '꿈·미래개척' 과목 필터링 옵션 (네이밍 수정)
+                dream_options = ['전체', '꿈·미래개척만 보기', '꿈·미래개척 제외']
+                selected_dream_filter = st.selectbox("꿈·미래개척 과목", dream_options, key="dream_filter_select")
+                selected_area = "전체" # 영역구분 필터는 비활성화
             else:
-                area_options_source = master_df[(master_df['type'] == '교양') & (master_df['이수구분'] == selected_cat)] if selected_cat != "전체" else master_df[master_df['type'] == '교양']
-                area_options = sorted([opt for opt in area_options_source['영역구분'].dropna().unique() if opt.strip()])
+                # 기존 영역구분 필터
+                area_options = sorted([opt for opt in options_df['영역구분'].dropna().unique() if opt.strip()])
                 selected_area = st.selectbox("영역구분", ["전체"] + area_options, key="area_select")
-                df_after_area = df_after_cat[df_after_cat['영역구분'] == selected_area] if selected_area != "전체" else df_after_cat
+                selected_dream_filter = "전체" # 꿈·미래개척 필터는 비활성화
+
+        if selected_area != "전체":
+            options_df = options_df[options_df['영역구분'] == selected_area]
 
         with col3:
-            method_options = sorted(df_after_area['수업방법'].dropna().unique().tolist())
+            method_options = sorted(options_df['수업방법'].dropna().unique().tolist())
             selected_method = st.selectbox("수업방법", ["전체"] + method_options, key="method_select")
-        df_after_method = df_after_area[df_after_area['수업방법'] == selected_method] if selected_method != "전체" else df_after_area
         
+        if selected_method != "전체":
+            options_df = options_df[options_df['수업방법'] == selected_method]
+
         with col4:
-            remote_options = sorted([opt for opt in df_after_method['원격강의구분'].dropna().unique() if opt.strip()])
+            remote_options = sorted([opt for opt in options_df['원격강의구분'].dropna().unique() if opt.strip()])
             selected_remote = st.selectbox("원격강의구분", ["전체"] + remote_options, key="remote_select")
-        df_after_remote = df_after_method[df_after_method['원격강의구분'] == selected_remote] if selected_remote != "전체" else df_after_method
         
+        if selected_remote != "전체":
+            options_df = options_df[options_df['원격강의구분'] == selected_remote]
+
         with col5:
-            campus_options = sorted(df_after_remote['캠퍼스구분'].dropna().unique().tolist())
+            campus_options = sorted(options_df['캠퍼스구분'].dropna().unique().tolist())
             selected_campus = st.selectbox("캠퍼스", ["전체"] + campus_options, key="general_campus_select")
-        final_filtered_gen_df = df_after_remote[df_after_remote['캠퍼스구분'] == selected_campus] if selected_campus != "전체" else df_after_remote
+
+        # --- 2. 모든 필터 값을 사용해 최종 데이터 필터링 ---
+        final_filtered_gen_df = general_df_to_display.copy()
+
+        # 각 필터를 독립적인 if문으로 분리하여 순차적으로 적용
+        if selected_cat != "전체":
+            final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['이수구분'] == selected_cat]
+
+        # '일반선택'의 특수 필터 로직
+        if selected_cat == '일반선택':
+            if selected_dream_filter == '꿈·미래개척만 보기':
+                final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['교과목명'] == '꿈·미래개척']
+            elif selected_dream_filter == '꿈·미래개척 제외':
+                final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['교과목명'] != '꿈·미래개척']
+        # '일반선택'이 아닌 다른 교양의 '영역구분' 필터
+        else:
+            if selected_area != "전체":
+                final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['영역구분'] == selected_area]
+
+        # 나머지 공통 필터
+        if selected_method != "전체":
+            final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['수업방법'] == selected_method]
+        if selected_remote != "전체":
+            final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['원격강의구분'] == selected_remote]
+        if selected_campus != "전체":
+            final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['캠퍼스구분'] == selected_campus]
 
         st.write("---")
         
         if not final_filtered_gen_df.empty:
             sorted_gen_df = final_filtered_gen_df.sort_values(by=['이수구분', '영역구분', '수업방법', '원격강의구분', '교과목명'], ascending=True)
-            course_options_gen = sorted_gen_df.apply(format_general_display_string, axis=1).tolist()
+            course_options_gen = sorted_gen_df.apply(format_display_string, axis=1).tolist()
         else:
             course_options_gen = []
         
         if not course_options_gen:
             st.warning("해당 조건에 현재 추가 가능한 교양 과목이 없습니다.")
         else:
-            selected_course_str_gen = st.selectbox("추가할 교양 과목 선택", course_options_gen, key="general_select", label_visibility="collapsed")
+            selected_index_gen = st.selectbox(
+                "추가할 교양 과목 선택",
+                options=sorted_gen_df.index,
+                format_func=lambda idx: format_display_string(sorted_gen_df.loc[idx]),
+                key="general_select",
+                label_visibility="collapsed"
+            )
             if st.button("교양 추가", key="add_general"):
-                selected_row = sorted_gen_df[sorted_gen_df.apply(format_general_display_string, axis=1) == selected_course_str_gen].iloc[0]
-                code, no = selected_row['교과목코드'], selected_row['분반']
-                st.session_state.my_courses.append((code, no))
-                if selected_row['교과목명'] not in st.session_state.color_map:
-                    next_color_index = len(st.session_state.color_map) % len(PREDEFINED_COLORS)
-                    st.session_state.color_map[selected_row['교과목명']] = PREDEFINED_COLORS[next_color_index]
-                st.success(f"'{selected_row['교과목명']}' 과목을 추가했습니다.")
-                st.rerun()
+                selected_row = sorted_gen_df.loc[selected_index_gen]
+                add_course_to_timetable(selected_row)
 
     st.divider()
     st.subheader("2. 나의 시간표")
@@ -407,9 +494,6 @@ if master_df is not None:
         
         st.components.v1.html(combined_html, height=(final_max_period - final_min_period + 2) * 55 + 120)
 
-        total_credits = my_courses_df['학점'].sum()
-        st.metric("총 신청 학점", f"{total_credits} 학점")
-
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
         if untimed_courses:
             st.write("**[시간 미지정 과목]**")
@@ -417,37 +501,162 @@ if master_df is not None:
                 remark_display = f" / 비고: {course['비고']}" if pd.notna(course['비고']) and course['비고'].strip() != '' else ''
                 remote_info_display = f" ({course['원격강의구분']})" if ('비대면' in course['수업방법'] or '혼합' in course['수업방법']) and pd.notna(course['원격강의구분']) and course['원격강의구분'].strip() != '' else ''
                 st.write(f"- [{course['수업방법']}{remote_info_display}] {course['교과목명']} ({course['교수명']}, {course['학점']}학점){remark_display}")
+                        
         st.write("---")
-        
-        list_col, button_col = st.columns([0.8, 0.2])
+
+        # 1. 목록 헤더 (한 줄 스타일) 및 전체 초기화 버튼
+        list_col, button_col = st.columns([0.85, 0.15])
         with list_col:
-            # 선택한 과목 수 표시
             num_selected_courses = len(st.session_state.my_courses)
-            st.write(f"**[선택한 과목 목록] (총 {num_selected_courses}과목)**")
+            # my_courses_df는 이 코드 블록 이전에 정의되어 있음
+            total_credits = my_courses_df['학점'].sum()
+            total_credits_str = str(int(total_credits)) if total_credits == int(total_credits) else f"{total_credits:.1f}"
+
+            header_html = f"""
+            <div style="display: flex; align-items: center; height: 40px; gap: 1.5rem;">
+                <strong style="font-size: 1.1rem; white-space: nowrap;">선택한 과목 내역 [총 {num_selected_courses}건]</strong>
+                <span class="bullet-item" style="display: flex; align-items: center; white-space: nowrap; color: #555;">
+                    <span>신청학점 : {total_credits_str} 학점</span>
+                </span>
+                <span class="bullet-item" style="display: flex; align-items: center; white-space: nowrap; color: #555;">
+                    <span>신청과목 : {num_selected_courses} 과목</span>
+                </span>
+            </div>
+            """
+            st.markdown(header_html, unsafe_allow_html=True)
+            
         with button_col:
             if st.button("전체 초기화", type="primary", use_container_width=True):
                 st.session_state.my_courses = []
                 st.session_state.color_map = {}
                 st.rerun()
 
-        for code, no in st.session_state.my_courses:
-            course = master_df[(master_df['교과목코드'] == code) & (master_df['분반'] == no)].iloc[0]
-            col1, col2 = st.columns([0.8, 0.2])
-            with col1:
-                display_str = format_major_display_string(course) if course['type'] == '전공' else format_general_display_string(course)
+        # 2. 선택된 과목 목록 (표 형식 UI) - 최종 격자 스타일
+        # CSS를 주입하여 표 스타일을 미세 조정
+        st.markdown("""
+        <style>
+            /* 복사 안 되는 글머리 기호 스타일 */
+            .bullet-item::before {
+                content: '●';
+                font-size: 0.6em;
+                margin-right: 0.4rem;
+                user-select: none; /* 선택 안 되게 설정 */
+            }
+            .styled-table {
+                border-top: 1px solid #cccccc;
+            }
+            /* 모든 행(stHorizontalBlock)에 대한 공통 스타일 */
+            .styled-table [data-testid="stHorizontalBlock"] {
+                border-bottom: 1px solid #cccccc;
+                align-items: stretch; /* 셀 높이 통일 */
+            }
+            /* 홀수번째 행(헤더, 2, 4, 6... 데이터 행)에 배경색 적용 */
+            .styled-table [data-testid="stHorizontalBlock"]:nth-child(odd) {
+                background-color: aliceblue;
+            }
+            /* 헤더 행(첫번째 자식)은 배경색 다시 흰색으로 오버라이드 */
+            .styled-table [data-testid="stHorizontalBlock"]:first-child {
+                background-color: white !important;
+            }
+            /* 모든 셀(컬럼)에 대한 공통 스타일 */
+            .styled-table [data-testid="stHorizontalBlock"] [data-testid="column"] {
+                border-right: 1px solid #cccccc;
+                padding: 0.2rem 0.4rem !important;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                word-break: break-all;
+            }
+            /* 마지막 셀은 오른쪽 테두리 제거 */
+            .styled-table [data-testid="stHorizontalBlock"] [data-testid="column"]:last-child {
+                border-right: none;
+            }
+            /* 삭제 버튼 */
+            .styled-table button {
+                padding: 0.1rem 0.5rem !important;
+                font-size: 12px !important;
+                height: 24px;
+            }
+        </style>
+        """, unsafe_allow_html=True)
 
-                # Flexbox를 사용하여 글머리 기호와 텍스트를 분리하고 정렬합니다.
-                st.markdown(f"""
-                <div style="display: flex; align-items: baseline;">
-                    <span style="margin-right: 9px;">-</span>
-                    <div style="word-break: break-all; overflow-wrap: break-word;">
-                        {display_str}
-                        <div style="opacity: 0.7;">(교과목코드: {code}, 분반: {int(no):03d})</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+        # 전체 표를 감싸는 컨테이너
+        with st.container():
+            st.markdown('<div class="styled-table">', unsafe_allow_html=True)
+            
+            # 표 헤더 생성 (학년 열 제거, 10개 컬럼)
+            headers = ['이수구분(학년/영역)', '교과목명', '교수명', '강의시간', '교과목코드', '분반', '학점', '수업방법', '비고', '삭제']
+            header_cols = st.columns([0.15, 0.15, 0.10, 0.14, 0.09, 0.05, 0.05, 0.10, 0.11, 0.06])
+            for col, header in zip(header_cols, headers):
+                col.markdown(f"**{header}**")
 
-            with col2:
-                if st.button("제거", key=f"del-{code}-{no}", use_container_width=True, type="secondary"):
-                    st.session_state.my_courses.remove((code, no))
-                    st.rerun()
+            # 선택된 과목 데이터 행
+            for index, (code, no) in enumerate(st.session_state.my_courses):
+                course = master_df[(master_df['교과목코드'] == code) & (master_df['분반'] == no)].iloc[0]
+                
+                data_cols = st.columns([0.15, 0.15, 0.10, 0.14, 0.09, 0.05, 0.05, 0.10, 0.11, 0.06])
+                
+                # --- 각 셀의 내용 생성 ---
+                
+                # 이수구분, 학년, 영역 정보를 하나로 결합
+                isu_text = course['이수구분']
+                if isu_text == '전필':
+                    isu_text = '전공필수'
+                elif isu_text == '전선':
+                    isu_text = '전공선택'
+                
+                detail_info = ""
+                if course['type'] == '전공' and pd.notna(course['대상학년']) and course['대상학년'].strip():
+                    detail_info = course['대상학년']
+                elif pd.notna(course['영역구분']) and course['영역구분'].strip():
+                    detail_info = course['영역구분']
+
+                if detail_info:
+                    isu_text = f"{isu_text}({detail_info})"
+                data_cols[0].write(isu_text)
+                
+                data_cols[1].write(course['교과목명'])
+                data_cols[2].write(course['교수명'])
+
+                # 강의시간/강의실 정보. 쉼표를 기준으로 줄바꿈 처리
+                time_str = course['강의시간/강의실'] if pd.notna(course['강의시간/강의실']) else ""
+                if time_str:
+                    time_parts = re.split(r',(?=[월화수목금토일])', time_str)
+                    formatted_time = '<br>'.join(time_parts)
+                    data_cols[3].markdown(formatted_time, unsafe_allow_html=True)
+                else:
+                    data_cols[3].write("")
+
+                data_cols[4].write(str(course['교과목코드']))
+                data_cols[5].write(f"{int(course['분반']):03d}")
+                
+                hakjeom = int(course['학점']) if course['학점'] == int(course['학점']) else course['학점']
+                data_cols[6].write(str(hakjeom))
+                
+                # 수업방식 + 캠퍼스 + 원격 정보 결합
+                method_text = course['수업방법']
+                details = []
+                if pd.notna(course['캠퍼스구분']) and course['캠퍼스구분'].strip():
+                    campus_short = course['캠퍼스구분'].split('캠퍼스')[0]
+                    details.append(campus_short)
+                if pd.notna(course['원격강의구분']) and course['원격강의구분'].strip():
+                     details.append(course['원격강의구분'])
+                
+                if details:
+                    method_text += f"<br><small>({', '.join(details)})</small>"
+                data_cols[7].markdown(method_text, unsafe_allow_html=True)
+
+                # 비고 폰트 크기 작게 수정
+                b_text = course['비고']
+                if pd.notna(b_text) and b_text.strip():
+                    data_cols[8].markdown(f"<small>{b_text}</small>", unsafe_allow_html=True)
+                else:
+                    data_cols[8].write("") 
+
+                with data_cols[9]:
+                    if st.button("삭제", key=f"del_table_{code}_{no}", use_container_width=True):
+                        st.session_state.my_courses.pop(index)
+                        st.rerun()
+            
+            st.markdown('</div>', unsafe_allow_html=True)
