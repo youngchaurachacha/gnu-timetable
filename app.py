@@ -544,7 +544,7 @@ if master_df is not None:
                         // 리사이징 없이, 캡처된 캔버스를 그대로 사용합니다.
                         const link = document.createElement("a");
                         link.href = canvas.toDataURL("image/png");
-                        link.download = "my_gnu_timetable.png";
+                        link.download = "2025-2학기 시간표.png";
                         
                         document.body.appendChild(link);
                         link.click();
