@@ -545,13 +545,7 @@ if master_df is not None:
 
             header_html = f"""
             <div style="display: flex; align-items: center; height: 40px; gap: 1.5rem;">
-                <strong style="font-size: 1.1rem; white-space: nowrap;">선택한 과목 내역 [총 {num_selected_courses}건]</strong>
-                <span class="bullet-item" style="display: flex; align-items: center; white-space: nowrap; color: #555;">
-                    <span>신청학점 : {total_credits_str} 학점</span>
-                </span>
-                <span class="bullet-item" style="display: flex; align-items: center; white-space: nowrap; color: #555;">
-                    <span>신청과목 : {num_selected_courses} 과목</span>
-                </span>
+                <strong style="font-size: 1.1rem; white-space: nowrap;">선택한 과목 내역 [총 {num_selected_courses}과목, {total_credits_str}학점]</strong>
             </div>
             """
             st.markdown(header_html, unsafe_allow_html=True)
@@ -564,14 +558,6 @@ if master_df is not None:
 
         st.markdown("""
         <style>
-            /* 복사 안 되는 글머리 기호 스타일 (헤더에 사용된 것) */
-            .bullet-item::before {
-                content: '●';
-                font-size: 0.6em; /* 헤더 글머리 기호 크기 유지 */
-                margin-right: 0.4rem;
-                user-select: none;
-            }
-
             /* 선택한 과목 목록의 글머리 기호 스타일 */
             .course-list-item::before {
                 content: '●';
@@ -593,7 +579,7 @@ if master_df is not None:
                 <div style="display: flex; align-items: baseline;" class="course-list-item">
                     <div style="word-break: break-all; overflow-wrap: break-word;">
                         {display_str}
-                        <div style="opacity: 0.7;">(교과목코드: {code}, 분반: {int(no):03d}, 학점: {int(course['학점']) if course['학점'] == int(course['학점']) else course['학점']}학점)</div>
+                        <div style="opacity: 0.7;">({code}-{int(no):03d}, {int(course['학점']) if course['학점'] == int(course['학점']) else course['학점']}학점)</div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
