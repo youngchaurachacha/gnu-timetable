@@ -287,7 +287,6 @@ if master_df is not None:
                     format_func=lambda idx: format_course_string(sorted_df.loc[idx], mode='selectbox'), # 1번 수정사항 적용
                     key=f"major_select_{filter_state_key}",  # 동적 key 적용
                     placeholder="과목을 선택하세요...",
-                    index=None,
                     label_visibility="collapsed"
                 )
 
@@ -400,7 +399,6 @@ if master_df is not None:
                 format_func=lambda idx: format_course_string(sorted_gen_df.loc[idx], mode='selectbox'),
                 key=f"general_select_{filter_state_key}",
                 placeholder="과목을 선택하세요...",
-                index=None,
                 label_visibility="collapsed"
             )
 
