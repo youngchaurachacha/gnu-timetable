@@ -532,7 +532,17 @@ if master_df is not None:
             for course in untimed_courses:
                 remark_display = f" / 비고: {course['비고']}" if pd.notna(course['비고']) and course['비고'].strip() != '' else ''
                 remote_info_display = f" ({course['원격강의구분']})" if ('비대면' in course['수업방법'] or '혼합' in course['수업방법']) and pd.notna(course['원격강의구분']) and course['원격강의구분'].strip() != '' else ''
-                st.write(f"- [{course['수업방법']}{remote_info_display}] {course['교과목명']} ({course['교수명']}, {course['학점']}학점){remark_display}")
+                
+                credits_val = course['학점']
+                try:
+                    credits_float = float(credits_val)
+                    # 숫자로 변환 후, 정수인지 확인하여 포맷팅
+                    formatted_credits = f"{int(credits_float)}학점" if credits_float == int(credits_float) else f"{credits_float}학점"
+                except (ValueError, TypeError):
+                    # 숫자로 변환할 수 없는 경우(예: 빈 문자열) 그대로 사용
+                    formatted_credits = f"{credits_val}학점"
+
+                st.write(f"- [{course['수업방법']}{remote_info_display}] {course['교과목명']} ({course['교수명']}, {formatted_credits}){remark_display}")
                         
         st.write("---")
 
