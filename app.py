@@ -605,21 +605,37 @@ if master_df is not None:
         st.write("---")
 
         # 1. 목록 헤더 (한 줄 스타일) 및 전체 초기화 버튼
-        list_col, action_col = st.columns([0.9, 0.1])
+        list_col, action_col = st.columns([0.85, 0.15])
         with list_col:
             num_selected_courses = len(st.session_state.my_courses)
+
+            # 학점 계산 (전체, 전공, 교양)
             total_credits = my_courses_df['학점'].sum() if not my_courses_df.empty else 0
-            total_credits_str = str(int(total_credits)) if total_credits == int(total_credits) else f"{total_credits:.1f}"
+            major_credits = my_courses_df[my_courses_df['type'] == '전공']['학점'].sum() if not my_courses_df.empty else 0
+            general_credits = my_courses_df[my_courses_df['type'] == '교양']['학점'].sum() if not my_courses_df.empty else 0
+
+            def format_credits(c):
+                return str(int(c)) if c == int(c) else f"{c:.1f}"
+
+            total_credits_str = format_credits(total_credits)
+            
+            credit_details_parts = []
+            if major_credits > 0:
+                credit_details_parts.append(f"전공 {format_credits(major_credits)}학점")
+            if general_credits > 0:
+                credit_details_parts.append(f"교양 {format_credits(general_credits)}학점")
+            
+            credit_details_str = f" ({', '.join(credit_details_parts)})" if credit_details_parts else ""
 
             st.markdown(f"""
             <div style="display: flex; align-items: center; height: 40px;">
-                <strong style="font-size: 1.1rem; white-space: nowrap;">선택한 과목 내역 [총 {num_selected_courses}과목, {total_credits_str}학점]</strong>
+                <strong style="font-size: 1.1rem; white-space: nowrap;">선택한 과목 내역 [총 {num_selected_courses}과목, {total_credits_str}학점{credit_details_str}]</strong>
             </div>
             """, unsafe_allow_html=True)
 
         with action_col:
             # '전체 초기화' 버튼: 클릭 시 URL 파라미터도 함께 초기화
-            if st.button("🔄 전체 초기화", type="primary", use_container_width=True):
+            if st.button("전체 초기화", type="primary", use_container_width=True):
                 st.session_state.my_courses = []
                 st.session_state.color_map = {}
                 if "courses" in st.query_params:
