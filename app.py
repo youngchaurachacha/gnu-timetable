@@ -283,6 +283,16 @@ if master_df is not None:
 
         st.write("---")
 
+        # 검색 기능
+        search_query = st.text_input("🔎 **과목명 또는 교수명으로 검색**", placeholder="예: 경제학원론 또는 홍길동", key="major_search")
+        if search_query:
+            # 검색어가 있으면 교과목명과 교수명 컬럼에서 모두 찾아 필터링 (대소문자 무관)
+            search_query_lower = search_query.lower()
+            final_filtered_df = final_filtered_df[
+                final_filtered_df['교과목명'].str.lower().str.contains(search_query_lower, na=False) |
+                final_filtered_df['교수명'].str.lower().str.contains(search_query_lower, na=False)
+            ]
+
         if not selected_depts:
             st.info("먼저 전공 학부(과)를 선택해주세요.")
         else:
@@ -384,6 +394,16 @@ if master_df is not None:
             final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['원격강의구분'] == selected_remote]
         if selected_campus != "전체":
             final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['캠퍼스구분'] == selected_campus]
+
+        # 검색 기능
+        search_query = st.text_input("🔎 **과목명 또는 교수명으로 검색**", placeholder="예: 문제해결글쓰기 또는 홍길동", key="general_search")
+        if search_query:
+            # 검색어가 있으면 교과목명과 교수명 컬럼에서 모두 찾아 필터링 (대소문자 무관)
+            search_query_lower = search_query.lower()
+            final_filtered_gen_df = final_filtered_gen_df[
+                final_filtered_gen_df['교과목명'].str.lower().str.contains(search_query_lower, na=False) |
+                final_filtered_gen_df['교수명'].str.lower().str.contains(search_query_lower, na=False)
+            ]
 
         st.write("---")
         
