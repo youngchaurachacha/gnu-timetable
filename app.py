@@ -316,6 +316,7 @@ if master_df is not None:
                     key="major_select",
                     label_visibility="collapsed"
                 )
+                st.info(f"**{len(course_options)}개**의 과목을 찾았습니다.") 
                 if st.button("전공 추가", key="add_major"):
                     # apply 없이 인덱스로 바로 행을 찾는다. (매우 빠름)
                     selected_row = sorted_df.loc[selected_index]
@@ -423,6 +424,7 @@ if master_df is not None:
                 key="general_select",
                 label_visibility="collapsed"
             )
+            st.info(f"**{len(course_options_gen)}개**의 과목을 찾았습니다.")
             if st.button("교양 추가", key="add_general"):
                 selected_row = sorted_gen_df.loc[selected_index_gen]
                 add_course_to_timetable(selected_row)
