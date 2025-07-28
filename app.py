@@ -255,13 +255,13 @@ if master_df is not None:
         majors_df_to_display = available_df[available_df['type'] == '전공']
         
         # --- 1. 필터 위젯 배치 및 사용자 선택값 받기 ---
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
             department_options = sorted(all_majors_df['학부(과)'].dropna().unique().tolist())
             selected_depts = st.multiselect("전공 학부(과)", department_options, key="depts_multiselect")
 
-        # 사용자의 선택에 따라 다음 필터들의 '옵션'을 동적으로 만들기 위한 데이터프레임
+        # 옵션 생성을 위한 데이터프레임
         options_df = all_majors_df[all_majors_df['학부(과)'].isin(selected_depts)] if selected_depts else all_majors_df
 
         with col2:
@@ -277,14 +277,35 @@ if master_df is not None:
 
         if selected_course_type != "전체":
             options_df = options_df[options_df['이수구분'] == selected_course_type]
-
+            
         with col4:
             major_campus_options = sorted(options_df['캠퍼스구분'].dropna().unique().tolist())
             selected_major_campus = st.selectbox("캠퍼스", ["전체"] + major_campus_options, key="major_campus_select")
+            
+        with col5:
+            # 현재 필터링된 데이터프레임에서 고유한 학점 목록을 동적으로 생성
+            credit_options = ['전체'] + sorted(options_df['학점'].dropna().unique())
+            
+            selected_credit = st.selectbox(
+                "학점",
+                credit_options,
+                key="credit_select",
+                # 사용자에게 보여주는 형식만 'n학점'으로 변경
+                format_func=lambda x: '전체' if x == '전체' else f'{x}학점'
+            )
 
-        # --- 2. 모든 필터 값을 사용해 최종 데이터 필터링 (간소화된 부분) ---
-        # 하나의 변수(final_filtered_df)를 계속해서 필터링
-        final_filtered_df = majors_df_to_display.copy() # 원본은 건드리지 않도록 복사
+        # 빈 시간으로 검색
+        with st.expander("🕒 빈 시간으로 검색하기 (선택)"):
+            time_filter_cols = st.columns(2)
+            with time_filter_cols[0]:
+                selected_days = st.multiselect('원하는 요일 선택', ['월', '화', '수', '목', '금', '토', '일'], key="filter_days")
+            with time_filter_cols[1]:
+                # 1~15교시까지 선택 가능
+                selected_periods = st.multiselect('원하는 교시 선택', list(range(0, 16)), key="filter_periods")
+
+        # --- 2. 모든 필터 값을 사용해 최종 데이터 필터링 ---
+        final_filtered_df = majors_df_to_display.copy()
+        
         if selected_depts:
             final_filtered_df = final_filtered_df[final_filtered_df['학부(과)'].isin(selected_depts)]
         if selected_grade != "전체":
@@ -293,6 +314,25 @@ if master_df is not None:
             final_filtered_df = final_filtered_df[final_filtered_df['이수구분'] == selected_course_type]
         if selected_major_campus != "전체":
             final_filtered_df = final_filtered_df[final_filtered_df['캠퍼스구분'] == selected_major_campus]
+        if selected_credit != '전체':
+            final_filtered_df = final_filtered_df[final_filtered_df['학점'] == selected_credit]
+
+        # 빈 시간 필터 로직
+        if selected_days and selected_periods:
+            # 사용자가 선택한 (요일, 교시) 조합으로 '허용된 시간 슬롯' 집합을 생성
+            allowed_slots = set()
+            for day in selected_days:
+                for period in selected_periods:
+                    allowed_slots.add((day, period))
+            
+            # 과목의 모든 시간이 '허용된 시간 슬롯'에 포함되는 경우만 남김
+            # 즉, 과목의 시간 집합이 허용된 시간 집합의 부분집합(subset)이어야 함
+            def is_subset_of_allowed(course_slots):
+                if not course_slots: # 시간이 지정되지 않은 과목은 필터링에서 제외
+                    return False
+                return course_slots.issubset(allowed_slots)
+
+            final_filtered_df = final_filtered_df[final_filtered_df['time_slots_set'].apply(is_subset_of_allowed)]
 
         # 검색 기능
         search_query = st.text_input("🔎 **과목명 또는 교수명으로 검색**", placeholder="예: 경제학원론 또는 홍길동", key="major_search")
@@ -344,7 +384,8 @@ if master_df is not None:
         general_df_to_display = available_df[available_df['type'] == '교양']
 
         # --- 1. 필터 위젯 배치 및 사용자 선택값 받기 ---
-        col1, col2, col3, col4, col5 = st.columns(5)
+        # 학점 필터 추가를 위해 6개 컬럼으로 확장
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
 
         with col1:
             cat_options = sorted(all_general_df['이수구분'].dropna().unique().tolist())
@@ -355,15 +396,13 @@ if master_df is not None:
 
         with col2:
             if selected_cat == '일반선택':
-                # '꿈·미래개척' 과목 필터링 옵션 (네이밍 수정)
                 dream_options = ['전체', '꿈·미래개척만 보기', '꿈·미래개척 제외']
                 selected_dream_filter = st.selectbox("꿈·미래개척 과목", dream_options, key="dream_filter_select")
-                selected_area = "전체" # 영역구분 필터는 비활성화
+                selected_area = "전체"
             else:
-                # 기존 영역구분 필터
                 area_options = sorted([opt for opt in options_df['영역구분'].dropna().unique() if opt.strip()])
                 selected_area = st.selectbox("영역구분", ["전체"] + area_options, key="area_select")
-                selected_dream_filter = "전체" # 꿈·미래개척 필터는 비활성화
+                selected_dream_filter = "전체"
 
         if selected_area != "전체":
             options_df = options_df[options_df['영역구분'] == selected_area]
@@ -385,37 +424,63 @@ if master_df is not None:
         with col5:
             campus_options = sorted(options_df['캠퍼스구분'].dropna().unique().tolist())
             selected_campus = st.selectbox("캠퍼스", ["전체"] + campus_options, key="general_campus_select")
+        
+        with col6:
+            # 교양 탭의 학점 필터
+            credit_options = ['전체'] + sorted(options_df['학점'].dropna().unique())
+            selected_credit = st.selectbox(
+                "학점",
+                credit_options,
+                key="gen_credit_select", # 중복 방지를 위한 고유 key
+                format_func=lambda x: '전체' if x == '전체' else f'{x}학점'
+            )
+
+        # 교양 탭의 빈 시간으로 검색
+        with st.expander("🕒 빈 시간으로 검색하기 (선택)"):
+            time_filter_cols = st.columns(2)
+            with time_filter_cols[0]:
+                selected_days = st.multiselect('원하는 요일 선택', ['월', '화', '수', '목', '금', '토', '일'], key="gen_filter_days")
+            with time_filter_cols[1]:
+                selected_periods = st.multiselect('원하는 교시 선택', list(range(0, 16)), key="gen_filter_periods")
 
         # --- 2. 모든 필터 값을 사용해 최종 데이터 필터링 ---
         final_filtered_gen_df = general_df_to_display.copy()
 
-        # 각 필터를 독립적인 if문으로 분리하여 순차적으로 적용
         if selected_cat != "전체":
             final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['이수구분'] == selected_cat]
 
-        # '일반선택'의 특수 필터 로직
         if selected_cat == '일반선택':
             if selected_dream_filter == '꿈·미래개척만 보기':
                 final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['교과목명'] == '꿈·미래개척']
             elif selected_dream_filter == '꿈·미래개척 제외':
                 final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['교과목명'] != '꿈·미래개척']
-        # '일반선택'이 아닌 다른 교양의 '영역구분' 필터
         else:
             if selected_area != "전체":
                 final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['영역구분'] == selected_area]
 
-        # 나머지 공통 필터
         if selected_method != "전체":
             final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['수업방법'] == selected_method]
         if selected_remote != "전체":
             final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['원격강의구분'] == selected_remote]
         if selected_campus != "전체":
             final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['캠퍼스구분'] == selected_campus]
+            
+        if selected_credit != '전체':
+            final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['학점'] == selected_credit]
+
+        if selected_days and selected_periods:
+            allowed_slots = set((day, period) for day in selected_days for period in selected_periods)
+            
+            def is_subset_of_allowed(course_slots):
+                if not course_slots:
+                    return False
+                return course_slots.issubset(allowed_slots)
+
+            final_filtered_gen_df = final_filtered_gen_df[final_filtered_gen_df['time_slots_set'].apply(is_subset_of_allowed)]
 
         # 검색 기능
         search_query = st.text_input("🔎 **과목명 또는 교수명으로 검색**", placeholder="예: 문제해결글쓰기 또는 홍길동", key="general_search")
         if search_query:
-            # 검색어가 있으면 교과목명과 교수명 컬럼에서 모두 찾아 필터링 (대소문자 무관)
             search_query_lower = search_query.lower()
             final_filtered_gen_df = final_filtered_gen_df[
                 final_filtered_gen_df['교과목명'].str.lower().str.contains(search_query_lower, na=False) |
