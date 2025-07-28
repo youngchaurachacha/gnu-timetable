@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 import re
-import random
-from io import BytesIO
 
 # --- 기본 설정 및 데이터 로딩 ---
 
@@ -16,21 +14,26 @@ st.markdown("""
 """)
 
 with st.expander("✨ 주요 기능 및 사용 안내 (클릭하여 확인)"):
-    st.markdown("""
-    ### ⚠️ 중요 알림
-    * **데이터 출처:** 본 시간표 정보는  [경상국립대학교 학사공지](https://www.gnu.ac.kr/main/na/ntt/selectNttInfo.do?mi=1127&bbsId=1029&nttSn=2547228)에 최초 공지된 PDF 파일을 기반으로 합니다.
-    * **변동 가능성:** 학사 운영상 수업 시간표는 변경될 수 있습니다. **수강 신청 전 반드시 [통합 서비스](https://my.gnu.ac.kr)에서 최종 시간표를 확인**하시기 바랍니다.
-    * **책임 한계:** 본 도우미를 통해 발생할 수 있는 시간표 오류나 수강 신청 불이익에 대해 개발자는 책임을 지지 않습니다.
+    st.subheader("⚠️ 중요 알림")
+    st.warning(
+        """
+        - **데이터 출처:** 본 시간표 정보는  [경상국립대학교 학사공지](https://www.gnu.ac.kr/main/na/ntt/selectNttInfo.do?mi=1127&bbsId=1029&nttSn=2547228)에 최초 공지된 PDF 파일을 기반으로 합니다.
+        - **변동 가능성:** 학사 운영상 수업 시간표는 변경될 수 있습니다. **수강 신청 전 반드시 [통합 서비스](https://my.gnu.ac.kr)에서 최종 시간표를 확인**하시기 바랍니다.
+        - **책임 한계:** 본 도우미를 통해 발생할 수 있는 시간표 오류나 수강 신청 불이익에 대해 개발자는 책임을 지지 않습니다.
+        """
+    )
 
-    ---
-
-    ### ✨ 주요 기능
-    * **실시간 시간표 확인:** 2025학년도 2학기 모든 개설 강좌 정보를 필터링하며 확인합니다.
-    * **나만의 시간표 구성:** 원하는 과목을 추가하여 개인 시간표를 시각적으로 구성하고, 선명한 색상으로 과목을 자동 구분합니다.
-    * **자동 중복 검사:** 이미 추가한 과목과 동일하거나 시간이 겹치는 모든 과목이 목록에서 자동 제외됩니다.
-    * **시간표 이미지 저장 🖼️:** 완성된 시간표를 깔끔한 이미지 파일(.png)로 다운로드하여 저장하거나 공유할 수 있습니다.
-    * **편의 기능:** 학점 자동 계산, 전체 초기화, 동적 시간표 확장, 상세 정보 제공 등
-    """)
+    st.subheader("✨ 주요 기능")
+    st.info(
+        """
+        - **실시간 시간표 확인:** 2025학년도 2학기 모든 개설 강좌 정보를 필터링하며 확인합니다.
+        - **나만의 시간표 구성:** 원하는 과목을 추가하여 개인 시간표를 시각적으로 구성하고, 선명한 색상으로 과목을 자동 구분합니다.
+        - **자동 중복 검사:** 이미 추가한 과목과 동일하거나 시간이 겹치는 모든 과목이 목록에서 자동 제외됩니다.
+        - **시간표 이미지 저장 🖼️:** 완성된 시간표를 깔끔한 이미지 파일(.png)로 다운로드하여 저장하거나 공유할 수 있습니다.
+        - **실시간 URL 공유 🔗:** 현재 시간표가 실시간으로 URL에 반영됩니다. 주소창의 URL을 복사해 간편하게 시간표를 공유하세요.
+        - **편의 기능:** 학점 자동 계산, 전체 초기화, 동적 시간표 확장, 상세 정보 제공 등
+        """
+    )
 
 # --- 색상 팔레트 (색각 이상자 고려, 명확히 구분되는 색상) ---
 PREDEFINED_COLORS = [
@@ -175,18 +178,19 @@ def add_course_to_timetable(course_row):
     """선택된 과목(row)을 세션에 추가하고, 색상을 할당한 뒤 앱을 새로고침한다."""
     code, no = course_row['교과목코드'], course_row['분반']
     
-    # 이미 추가된 과목인지 확인 (필수는 아니지만, 사용자 편의성을 위해 추가 가능)
     if (code, no) in st.session_state.my_courses:
         st.warning(f"'{course_row['교과목명']}' 과목은 이미 목록에 있습니다.")
         return
 
     st.session_state.my_courses.append((code, no))
     
-    # 색상 맵에 과목명 없으면 새 색상 할당
     if course_row['교과목명'] not in st.session_state.color_map:
         next_color_index = len(st.session_state.color_map) % len(PREDEFINED_COLORS)
         st.session_state.color_map[course_row['교과목명']] = PREDEFINED_COLORS[next_color_index]
-        
+    
+    updated_courses_param = ",".join([f"{c}-{n}" for c, n in st.session_state.my_courses])
+    st.query_params["courses"] = updated_courses_param
+
     st.success(f"✅ '{course_row['교과목명']}' 과목을 추가했습니다.")
     st.rerun()
 
@@ -201,6 +205,34 @@ master_df = load_and_process_data(excel_file_path, '2학기 전공 시간표', '
 if master_df is not None:
     if 'my_courses' not in st.session_state: st.session_state.my_courses = []
     if 'color_map' not in st.session_state: st.session_state.color_map = {}
+
+    # --- URL 읽기 기능 추가: 앱 로드 시 파라미터 확인 ---
+    if "courses" in st.query_params and not st.session_state.my_courses:
+        try:
+            courses_str = st.query_params.get("courses")
+            if courses_str:
+                shared_courses = []
+                items = courses_str.split(',')
+                for item in items:
+                    if '-' in item:
+                        code, no = map(int, item.split('-'))
+                        # master_df에 해당 과목이 있는지 확인
+                        if not master_df[(master_df['교과목코드'] == code) & (master_df['분반'] == no)].empty:
+                            shared_courses.append((code, no))
+                
+                if shared_courses:
+                    st.session_state.my_courses = shared_courses
+                    # 색상 맵 다시 채우기
+                    shared_courses_df = master_df[master_df.set_index(['교과목코드', '분반']).index.isin(shared_courses)]
+                    for _, course_row in shared_courses_df.iterrows():
+                        if course_row['교과목명'] not in st.session_state.color_map:
+                            next_color_index = len(st.session_state.color_map) % len(PREDEFINED_COLORS)
+                            st.session_state.color_map[course_row['교과목명']] = PREDEFINED_COLORS[next_color_index]
+                    # URL을 읽어들인 후에는 rerun하여 정상 상태로 전환
+                    st.rerun()
+        except (ValueError, IndexError):
+            st.error("공유된 URL의 형식이 올바르지 않습니다.")
+            st.query_params.clear() # 잘못된 파라미터는 지워준다.
 
     available_df = get_available_courses(master_df, st.session_state.my_courses)
 
@@ -563,24 +595,28 @@ if master_df is not None:
         st.write("---")
 
         # 1. 목록 헤더 (한 줄 스타일) 및 전체 초기화 버튼
-        list_col, button_col = st.columns([0.85, 0.15])
+        list_col, action_col = st.columns([0.9, 0.1])
         with list_col:
             num_selected_courses = len(st.session_state.my_courses)
-            total_credits = my_courses_df['학점'].sum()
+            total_credits = my_courses_df['학점'].sum() if not my_courses_df.empty else 0
             total_credits_str = str(int(total_credits)) if total_credits == int(total_credits) else f"{total_credits:.1f}"
 
-            header_html = f"""
-            <div style="display: flex; align-items: center; height: 40px; gap: 1.5rem;">
+            st.markdown(f"""
+            <div style="display: flex; align-items: center; height: 40px;">
                 <strong style="font-size: 1.1rem; white-space: nowrap;">선택한 과목 내역 [총 {num_selected_courses}과목, {total_credits_str}학점]</strong>
             </div>
-            """
-            st.markdown(header_html, unsafe_allow_html=True)
-            
-        with button_col:
-            if st.button("전체 초기화", type="primary", use_container_width=True):
+            """, unsafe_allow_html=True)
+
+        with action_col:
+            # '전체 초기화' 버튼: 클릭 시 URL 파라미터도 함께 초기화
+            if st.button("🔄 전체 초기화", type="primary", use_container_width=True):
                 st.session_state.my_courses = []
                 st.session_state.color_map = {}
+                if "courses" in st.query_params:
+                    st.query_params.clear()
                 st.rerun()
+
+        st.info("시간표를 공유하려면 현재 브라우저의 주소창에 있는 전체 URL을 복사하여 전달하세요.", icon="💡")
 
         st.markdown("""
         <style>
@@ -596,7 +632,7 @@ if master_df is not None:
 
         for index, (code, no) in enumerate(st.session_state.my_courses):
             course = master_df[(master_df['교과목코드'] == code) & (master_df['분반'] == no)].iloc[0]
-            col1, col2 = st.columns([0.8, 0.2])
+            col1, col2 = st.columns([0.9, 0.1])
             with col1:
                 display_str = format_course_string(course, mode='list') 
 
@@ -613,4 +649,13 @@ if master_df is not None:
                 # 삭제 버튼의 key는 고유해야 하므로 index도 포함
                 if st.button("제거", key=f"del-{code}-{no}-{index}", use_container_width=True, type="secondary"):
                     st.session_state.my_courses.pop(index)
+                    
+                    # URL 업데이트
+                    updated_courses_param = ",".join([f"{c}-{n}" for c, n in st.session_state.my_courses])
+                    if updated_courses_param:
+                        st.query_params["courses"] = updated_courses_param
+                    else: # 마지막 과목이 제거된 경우
+                        if "courses" in st.query_params:
+                            st.query_params.clear()
+                            
                     st.rerun()
