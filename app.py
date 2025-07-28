@@ -26,17 +26,10 @@ with st.expander("✨ 주요 기능 및 사용 안내 (클릭하여 확인)"):
 
     ### ✨ 주요 기능
     * **실시간 시간표 확인:** 2025학년도 2학기 모든 개설 강좌 정보를 필터링하며 확인합니다.
-    * **나만의 시간표 구성:** 원하는 과목을 추가하여 개인 시간표를 시각적으로 구성하고, 색각 이상자를 고려한 선명한 색상으로 과목을 자동 구분합니다.
-    * **자동 중복 검사 (핵심 기능 💡)**
-        * **과목 중복 방지:** 이미 추가한 과목과 동일한 교과목코드의 다른 분반은 목록에서 자동 제외됩니다.
-        * **시간 중복 방지:** 현재 시간표와 시간이 겹치는 모든 과목이 목록에서 자동 제외되어, 충돌 없는 시간표를 손쉽게 만들 수 있습니다.
+    * **나만의 시간표 구성:** 원하는 과목을 추가하여 개인 시간표를 시각적으로 구성하고, 선명한 색상으로 과목을 자동 구분합니다.
+    * **자동 중복 검사:** 이미 추가한 과목과 동일하거나 시간이 겹치는 모든 과목이 목록에서 자동 제외됩니다.
     * **시간표 이미지 저장 🖼️:** 완성된 시간표를 깔끔한 이미지 파일(.png)로 다운로드하여 저장하거나 공유할 수 있습니다.
-    * **편의 기능**
-        * **동적 시간표 확장:** 토/일 수업이나 0교시, 야간 수업 추가 시 시간표 범위가 자동으로 확장됩니다.
-        * **학점 자동 계산:** 선택한 과목들의 총 학점을 실시간으로 보여줍니다.
-        * **전체 초기화:** 버튼 하나로 선택한 모든 과목을 삭제하고 처음부터 다시 시작할 수 있습니다.
-        * **상세 정보 제공:** 과목명, 교수명, 분반, 학점, 수업 방식, 캠퍼스, 강의실, 원격 수업 방식, 비고 등 모든 정보를 한눈에 볼 수 있습니다.
-
+    * **편의 기능:** 학점 자동 계산, 전체 초기화, 동적 시간표 확장, 상세 정보 제공 등
     """)
 
 # --- 색상 팔레트 (색각 이상자 고려, 명확히 구분되는 색상) ---
@@ -134,8 +127,12 @@ def get_available_courses(df, selected_codes):
     
     return available_df[is_available_time]
 
-def format_display_string(x):
-    """(통합 버전) 과목의 시리즈(행)를 받아 전공/교양에 맞춰 UI에 표시할 문자열을 생성한다."""
+def format_course_string(x, mode='selectbox'):
+    """
+    (통합 버전) 과목의 시리즈(행)를 받아 UI에 표시할 문자열을 생성한다.
+    - mode='selectbox': 드롭다운 메뉴용 전체 정보 표시
+    - mode='list': 선택된 과목 목록용 축약 정보 표시
+    """
     # 공통 정보 구성
     method_campus_info = ""
     if pd.notna(x['수업방법']) and x['수업방법'].strip() != '':
@@ -148,56 +145,30 @@ def format_display_string(x):
     if ('비대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['원격강의구분']) and x['원격강의구분'].strip() != '':
         remote_info = f"({x['원격강의구분']})"
 
-    formatted_bunban = f"{int(x['분반']):03d}"
-    formatted_hakjeom = f"{int(x['학점'])}학점" if x['학점'] == int(x['학점']) else f"{x['학점']}학점"
     time_display = x['강의시간/강의실'] if pd.notna(x['강의시간/강의실']) else "시간미지정"
     
-    # 타입에 따른 분기 처리
+    # 타입에 따른 정보 구성 (전공/교양)
     if x['type'] == '전공':
         type_specific_info = f"[{x['대상학년']}/{x['이수구분']}"
     else:  # '교양'
         area_info = f"/{x['영역구분']}" if pd.notna(x['영역구분']) and x['영역구분'].strip() else ""
         type_specific_info = f"[{x['이수구분']}{area_info}"
-        
+    
+    # mode에 따른 정보 분기
+    if mode == 'selectbox':
+        formatted_bunban = f"{int(x['분반']):03d}"
+        formatted_hakjeom = f"{int(x['학점'])}학점" if x['학점'] == int(x['학점']) else f"{x['학점']}학점"
+        professor_info = f"{x['교수명']}, {formatted_bunban}반, {formatted_hakjeom}"
+    else: # mode == 'list'
+        professor_info = x['교수명']
+
     # 최종 문자열 조합
     base_str = (f"{type_specific_info}{method_campus_info}{remote_info}] "
-                f"{x['교과목명']} ({x['교수명']}, {formatted_bunban}반, {formatted_hakjeom}) / {time_display}")
+                f"{x['교과목명']} ({professor_info}) / {time_display}")
     
     if pd.notna(x['비고']) and x['비고'].strip() != '':
         base_str += f" / 비고: {x['비고']}"
         
-    return base_str
-
-def format_list_item_string(x):
-    method_campus_info = ""
-    if pd.notna(x['수업방법']) and x['수업방법'].strip() != '':
-        if ('대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['캠퍼스구분']) and x['캠퍼스구분'].strip() != '':
-            method_campus_info = f"/{x['수업방법']}({x['캠퍼스구분']})"
-        else:
-            method_campus_info = f"/{x['수업방법']}"
-
-    remote_info = ""
-    if ('비대면' in x['수업방법'] or '혼합' in x['수업방법']) and pd.notna(x['원격강의구분']) and x['원격강의구분'].strip() != '':
-        remote_info = f"({x['원격강의구분']})"
-
-    # formatted_bunban = f"{int(x['분반']):03d}" # 여기서는 제거
-    # formatted_hakjeom = f"{int(x['학점'])}학점" if x['학점'] == int(x['학점']) else f"{x['학점']}학점" # 여기서는 제거
-
-    time_display = x['강의시간/강의실'] if pd.notna(x['강의시간/강의실']) else "시간미지정"
-
-    if x['type'] == '전공':
-        type_specific_info = f"[{x['대상학년']}/{x['이수구분']}"
-    else:
-        area_info = f"/{x['영역구분']}" if pd.notna(x['영역구분']) and x['영역구분'].strip() else ""
-        type_specific_info = f"[{x['이수구분']}{area_info}"
-
-    # 이 부분에서 분반과 학점을 제외
-    base_str = (f"{type_specific_info}{method_campus_info}{remote_info}] "
-                f"{x['교과목명']} ({x['교수명']}) / {time_display}")
-
-    if pd.notna(x['비고']) and x['비고'].strip() != '':
-        base_str += f" / 비고: {x['비고']}"
-
     return base_str
 
 def add_course_to_timetable(course_row):
@@ -216,7 +187,7 @@ def add_course_to_timetable(course_row):
         next_color_index = len(st.session_state.color_map) % len(PREDEFINED_COLORS)
         st.session_state.color_map[course_row['교과목명']] = PREDEFINED_COLORS[next_color_index]
         
-    st.success(f"'{course_row['교과목명']}' 과목을 추가했습니다.")
+    st.success(f"✅ '{course_row['교과목명']}' 과목을 추가했습니다.")
     st.rerun()
 
 # --- 웹앱 UI 및 로직 ---
@@ -281,8 +252,6 @@ if master_df is not None:
         if selected_major_campus != "전체":
             final_filtered_df = final_filtered_df[final_filtered_df['캠퍼스구분'] == selected_major_campus]
 
-        st.write("---")
-
         # 검색 기능
         search_query = st.text_input("🔎 **과목명 또는 교수명으로 검색**", placeholder="예: 경제학원론 또는 홍길동", key="major_search")
         if search_query:
@@ -293,6 +262,8 @@ if master_df is not None:
                 final_filtered_df['교수명'].str.lower().str.contains(search_query_lower, na=False)
             ]
 
+        st.write("---")
+
         if not selected_depts:
             st.info("먼저 전공 학부(과)를 선택해주세요.")
         else:
@@ -301,26 +272,30 @@ if master_df is not None:
                 temp_df = final_filtered_df.copy()
                 temp_df['grade_num'] = temp_df['대상학년'].str.extract(r'(\d+)').astype(float).fillna(99)
                 sorted_df = temp_df.sort_values(by=['grade_num', '이수구분', '교과목명'], ascending=[True, False, True])
-            
-            course_options = sorted_df.apply(format_display_string, axis=1).tolist() if not sorted_df.empty else []
-            
-            if not course_options:
+                        
+            if sorted_df.empty:
                 st.warning("선택한 조건에 현재 추가 가능한 전공 과목이 없습니다.")
             else:
-                # options로는 데이터프레임의 '인덱스'를 사용한다.
-                # format_func를 사용해 사용자에게는 포맷팅된 문자열을 보여준다.
+                st.info(f"**{len(sorted_df)}개**의 과목을 찾았습니다.")
+
+                # 필터 값에 따라 동적으로 key를 생성
+                filter_state_key = f"{''.join(selected_depts)}-{selected_grade}-{selected_course_type}-{selected_major_campus}-{search_query}"
+
                 selected_index = st.selectbox(
                     "추가할 전공 과목 선택",
                     options=sorted_df.index,
-                    format_func=lambda idx: format_display_string(sorted_df.loc[idx]),
-                    key="major_select",
+                    format_func=lambda idx: format_course_string(sorted_df.loc[idx], mode='selectbox'), # 1번 수정사항 적용
+                    key=f"major_select_{filter_state_key}",  # 동적 key 적용
+                    placeholder="과목을 선택하세요...",
+                    index=None,
                     label_visibility="collapsed"
                 )
-                st.info(f"**{len(course_options)}개**의 과목을 찾았습니다.") 
-                if st.button("전공 추가", key="add_major"):
-                    # apply 없이 인덱스로 바로 행을 찾는다. (매우 빠름)
-                    selected_row = sorted_df.loc[selected_index]
-                    add_course_to_timetable(selected_row)
+
+                if selected_index is not None:
+                    # 버튼의 key도 충돌 방지를 위해 동적으로 변경
+                    if st.button("전공 추가", key=f"add_major_btn_{filter_state_key}", use_container_width=True):
+                        selected_row = sorted_df.loc[selected_index]
+                        add_course_to_timetable(selected_row)
 
     with tab_general:
         # 필터링 기반 데이터 정의
@@ -408,26 +383,31 @@ if master_df is not None:
 
         st.write("---")
         
-        if not final_filtered_gen_df.empty:
+        if final_filtered_gen_df.empty:
+            st.warning("선택한 조건에 현재 추가 가능한 교양 과목이 없습니다.")
+        else:
+            # 결과가 있을 때만 정렬 및 나머지 UI를 처리한다.
             sorted_gen_df = final_filtered_gen_df.sort_values(by=['이수구분', '영역구분', '수업방법', '원격강의구분', '교과목명'], ascending=True)
-            course_options_gen = sorted_gen_df.apply(format_display_string, axis=1).tolist()
-        else:
-            course_options_gen = []
-        
-        if not course_options_gen:
-            st.warning("해당 조건에 현재 추가 가능한 교양 과목이 없습니다.")
-        else:
+            
+            st.info(f"**{len(sorted_gen_df)}개**의 과목을 찾았습니다.")
+
+            # 필터 값에 따라 동적으로 key를 생성
+            filter_state_key = f"{selected_cat}-{selected_dream_filter}-{selected_area}-{selected_method}-{selected_remote}-{selected_campus}-{search_query}"
+            
             selected_index_gen = st.selectbox(
                 "추가할 교양 과목 선택",
                 options=sorted_gen_df.index,
-                format_func=lambda idx: format_display_string(sorted_gen_df.loc[idx]),
-                key="general_select",
+                format_func=lambda idx: format_course_string(sorted_gen_df.loc[idx], mode='selectbox'),
+                key=f"general_select_{filter_state_key}",
+                placeholder="과목을 선택하세요...",
+                index=None,
                 label_visibility="collapsed"
             )
-            st.info(f"**{len(course_options_gen)}개**의 과목을 찾았습니다.")
-            if st.button("교양 추가", key="add_general"):
-                selected_row = sorted_gen_df.loc[selected_index_gen]
-                add_course_to_timetable(selected_row)
+
+            if selected_index_gen is not None:
+                if st.button("교양 추가", key=f"add_gen_btn_{filter_state_key}", use_container_width=True):
+                    selected_row = sorted_gen_df.loc[selected_index_gen]
+                    add_course_to_timetable(selected_row)
 
     st.divider()
     st.subheader("2. 나의 시간표")
@@ -594,8 +574,7 @@ if master_df is not None:
             course = master_df[(master_df['교과목코드'] == code) & (master_df['분반'] == no)].iloc[0]
             col1, col2 = st.columns([0.8, 0.2])
             with col1:
-                # format_display_string 대신 format_list_item_string 호출
-                display_str = format_list_item_string(course) 
+                display_str = format_course_string(course, mode='list') 
 
                 st.markdown(f"""
                 <div style="display: flex; align-items: baseline;" class="course-list-item">
