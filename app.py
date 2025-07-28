@@ -472,6 +472,26 @@ if master_df is not None:
                 if cell and cell["is_visible"]:
                     table_html += f'<td rowspan="{cell["span"]}" style="background-color:{cell["color"]};">{cell["content"]}</td>'
             table_html += '</tr>'
+
+        # 시간 미지정 과목 행 추가
+        untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
+        if untimed_courses:
+            # 1. '시간 미지정' 레이블이 들어갈 첫 번째 셀 추가
+            table_html += '<tr><td style="font-weight:bold;">시간 미지정</td>'
+            
+            # 2. 표시할 과목 정보들을 리스트로 만듦
+            untimed_content_parts = []
+            for course in untimed_courses:
+                professor_info = f"({course['교수명']})"
+                untimed_content_parts.append(f"<b>{course['교과목명']}</b> {professor_info}")
+            
+            # 3. 과목들을 <br> 태그로 묶어서 한 줄씩 보이게 함
+            untimed_content = "<br>".join(untimed_content_parts)
+            
+            # 4. 요일 수만큼 열을 병합(colspan)하고, 스타일을 적용한 최종 셀을 추가
+            table_html += f'<td colspan="{len(days_to_display)}" style="text-align: left; padding: 8px; background-color: #f8f9fa; line-height: 1.6;">{untimed_content}</td>'
+            table_html += '</tr>'
+
         table_html += "</table></div>"
         
         button_html = """
@@ -524,25 +544,21 @@ if master_df is not None:
         {button_html}
         """
         
-        st.components.v1.html(combined_html, height=(final_max_period - final_min_period + 2) * 55 + 120)
-
+        # 1. 시간 미지정 과목 리스트 생성
         untimed_courses = [course for _, course in my_courses_df.iterrows() if not course['parsed_time']]
-        if untimed_courses:
-            st.write("**[시간 미지정 과목]**")
-            for course in untimed_courses:
-                remark_display = f" / 비고: {course['비고']}" if pd.notna(course['비고']) and course['비고'].strip() != '' else ''
-                remote_info_display = f" ({course['원격강의구분']})" if ('비대면' in course['수업방법'] or '혼합' in course['수업방법']) and pd.notna(course['원격강의구분']) and course['원격강의구분'].strip() != '' else ''
-                
-                credits_val = course['학점']
-                try:
-                    credits_float = float(credits_val)
-                    # 숫자로 변환 후, 정수인지 확인하여 포맷팅
-                    formatted_credits = f"{int(credits_float)}학점" if credits_float == int(credits_float) else f"{credits_float}학점"
-                except (ValueError, TypeError):
-                    # 숫자로 변환할 수 없는 경우(예: 빈 문자열) 그대로 사용
-                    formatted_credits = f"{credits_val}학점"
 
-                st.write(f"- [{course['수업방법']}{remote_info_display}] {course['교과목명']} ({course['교수명']}, {formatted_credits}){remark_display}")
+        # 2. 기본 높이 계산
+        base_height = (final_max_period - final_min_period + 2) * 55 + 120
+        
+        # 3. 시간 미지정 과목이 있으면 추가 높이 계산
+        extra_height = 0
+        if untimed_courses:
+            # 기본 행 높이 55px + 추가 과목당 약 25px (줄바꿈 고려)
+            extra_height = 55 + (len(untimed_courses) - 1) * 25
+
+        # 4. 최종 높이로 html 컴포넌트 렌더링
+        total_height = base_height + extra_height
+        st.components.v1.html(combined_html, height=total_height)
                         
         st.write("---")
 
