@@ -45,11 +45,18 @@ with st.expander("✨ 주요 기능 및 사용 안내 (클릭하여 확인)"):
     )
 
 
-# --- 색상 팔레트 (색각 이상자 고려, 명확히 구분되는 색상) ---
+# --- 색상 팔레트 ---
 PREDEFINED_COLORS = [
     "#8dd3c7", "#ffffb3", "#bebada", "#fb8072", "#80b1d3", "#fdb462",
-    "#b3de69", "#fccde5", "#d9d9d9", "#bc80bd", "#ccebc5", "#ffed6f"
+    "#b3de69", "#fccde5", "#d9d9d9", "#bc80bd", "#ccebc5", "#ffed6f",
+    "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5", "#c49c94"
 ]
+
+def ensure_columns(df, required_cols):
+    """데이터프레임에 필요한 컬럼이 없으면 빈 문자열로 추가합니다."""
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = ''
 
 @st.cache_data
 def load_and_process_data(file_path, major_sheet, general_sheet):
@@ -67,11 +74,8 @@ def load_and_process_data(file_path, major_sheet, general_sheet):
     general_cols = ['교과목명', '교수명', '학점', '이수구분', '영역구분', '학과', '수강반번호', '강의시간/강의실', '캠퍼스구분', '교과목코드', '수업방법', '비고', '원격강의구분']
     major_cols = ['교과목명', '교수명', '학점', '이수구분', '학부(과)', '대상학년', '분반', '강의시간/강의실', '캠퍼스구분', '교과목코드', '수업방법', '비고', '원격강의구분']
 
-    for col in general_cols:
-        if col not in df_general.columns: df_general[col] = ''
-    for col in major_cols:
-        if col not in df_major.columns: df_major[col] = ''
-
+    ensure_columns(df_general, general_cols)
+    ensure_columns(df_major, major_cols)
     df_general_p = df_general[general_cols].copy()
     df_general_p.rename(columns={'학과': '학부(과)', '수강반번호': '분반'}, inplace=True)
     df_general_p['type'] = '교양'
