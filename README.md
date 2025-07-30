@@ -41,6 +41,51 @@
 
 ---
 
+## 💻 로컬에서 직접 실행하기
+
+이 프로젝트를 자신의 컴퓨터에서 직접 실행하고 싶다면 아래의 안내를 따르세요.
+
+**사전 준비물:**
+* Python 3.8 이상
+* Git
+
+**설치 및 실행 단계:**
+
+1.  **리포지토리 복제 (Clone)**: 터미널을 열고 아래 명령어를 입력하여 프로젝트를 복제합니다.
+    ```bash
+    git clone https://github.com/youngchaurachacha/gnu-timetable.git
+    ```
+
+2.  **폴더 이동**: 다운로드된 프로젝트 폴더로 이동합니다.
+    ```bash
+    cd gnu-timetable
+    ```
+
+3.  **가상환경 생성 및 활성화**: 프로젝트를 위한 독립된 파이썬 환경을 만듭니다.
+    * **Windows:**
+        ```batch
+        python -m venv venv
+        .\venv\Scripts\activate
+        ```
+    * **macOS / Linux:**
+        ```bash
+        python3 -m venv venv
+        source venv/bin/activate
+        ```
+
+4.  **라이브러리 설치**: `requirements.txt` 파일을 이용해 프로젝트에 필요한 모든 라이브러리를 한 번에 설치합니다.
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+5.  **앱 실행**: 아래 명령어를 직접 입력하거나, **Windows 사용자의 경우 `run_app.bat` 파일을 더블클릭**하여 앱을 실행합니다.
+    ```bash
+    streamlit run app.py
+    ```
+    실행 후 잠시 기다리면 웹 브라우저에서 시간표 도우미가 자동으로 열립니다.
+
+---
+
 ## ⚠️ 중요 알림
 
 * **데이터 출처**: 본 시간표 정보는 [경상국립대학교 학사공지](https://www.gnu.ac.kr/main/na/ntt/selectNttInfo.do?mi=1127&bbsId=1029&nttSn=2547228)에 최초 공지된 PDF 파일을 기반으로 합니다.
