@@ -344,8 +344,8 @@ if master_df is not None:
             # 검색어가 있으면 교과목명과 교수명 컬럼에서 모두 찾아 필터링 (대소문자 무관)
             search_query_lower = search_query.lower()
             final_filtered_df = final_filtered_df[
-                final_filtered_df['교과목명'].str.lower().str.contains(search_query_lower, regex=False, na=False) |
-                final_filtered_df['교수명'].str.lower().str.contains(search_query_lower, regex=False, na=False)
+                (final_filtered_df['교과목명'].str.lower().str.contains(search_query_lower, regex=False, na=False)) |
+                (final_filtered_df['교수명'].str.lower().str.contains(search_query_lower, regex=False, na=False))
             ]
 
         st.write("---")
@@ -487,8 +487,8 @@ if master_df is not None:
         if search_query:
             search_query_lower = search_query.lower()
             final_filtered_gen_df = final_filtered_gen_df[
-                final_filtered_gen_df['교과목명'].str.lower().str.contains(search_query_lower, regex=False, na=False) |
-                final_filtered_gen_df['교수명'].str.lower().str.contains(search_query_lower, regex=False, na=False)
+                (final_filtered_gen_df['교과목명'].str.lower().str.contains(search_query_lower, regex=False, na=False)) |
+                (final_filtered_gen_df['교수명'].str.lower().str.contains(search_query_lower, regex=False, na=False))
             ]
 
         st.write("---")
