@@ -53,7 +53,7 @@
 
 1.  **리포지토리 복제 (Clone)**: 터미널을 열고 아래 명령어를 입력하여 프로젝트를 복제합니다.
     ```bash
-    git clone https://github.com/youngchaurachacha/gnu-timetable.git
+    git clone https://github.com/youngchaurachacha/gnu-timetable
     ```
 
 2.  **폴더 이동**: 다운로드된 프로젝트 폴더로 이동합니다.
